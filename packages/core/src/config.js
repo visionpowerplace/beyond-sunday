@@ -1,6 +1,10 @@
 import path from 'node:path';
 
-const env = process.env;
+// Pasted values pick up stray whitespace and newlines; trim everything once
+// here rather than hunting a mystery auth failure later.
+const env = new Proxy(process.env, {
+  get: (target, name) => (typeof target[name] === 'string' ? target[name].trim() : target[name]),
+});
 
 export const config = {
   databaseUrl: env.DATABASE_URL || '',
@@ -29,9 +33,14 @@ export const config = {
 };
 
 // Loud about mock mode: the single biggest source of "why is the output rubbish".
+// Never prints a value, only whether it is set and whether it makes sense.
 export function describeProviders() {
-  const bits = [];
-  bits.push(`transcribe=${config.transcribe.provider}${config.transcribe.provider === 'groq' && !config.transcribe.groqKey ? ' (NO KEY - will fail)' : ''}`);
-  bits.push(`llm=${config.llm.provider}${config.llm.provider === 'openrouter' && !config.llm.openrouterKey ? ' (NO KEY - will fail)' : ''}`);
-  return bits.join('  ');
+  return [describe('TRANSCRIBE_PROVIDER', config.transcribe.provider, ['groq', 'mock'], config.transcribe.groqKey, 'GROQ_API_KEY'),
+          describe('LLM_PROVIDER', config.llm.provider, ['openrouter', 'mock'], config.llm.openrouterKey, 'OPENROUTER_API_KEY')].join('  |  ');
+}
+
+function describe(name, value, allowed, key, keyName) {
+  if (!allowed.includes(value)) return `${name}=INVALID (expected ${allowed.join(' or ')}; a key belongs in ${keyName})`;
+  if (value === 'mock') return `${name}=mock (placeholder output)`;
+  return `${name}=${value}${key ? '' : ` but ${keyName} is empty - will fail`}`;
 }

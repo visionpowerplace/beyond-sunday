@@ -10,8 +10,14 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
  * max_tokens, a repair pass over the common truncation shapes, and exactly one
  * retry on a parse failure before giving up honestly.
  */
+export const LLM_PROVIDERS = ['openrouter', 'mock'];
+
 export async function completeJson({ system, user, maxTokens = 8000, temperature = 0.4 }) {
   if (config.llm.provider === 'mock') return null;
+  if (!LLM_PROVIDERS.includes(config.llm.provider)) {
+    // As above: the value is never echoed, in case it is a key.
+    throw new Error(`LLM_PROVIDER is not one of ${LLM_PROVIDERS.join(' or ')}. If you meant to set a key, the variable is OPENROUTER_API_KEY.`);
+  }
   if (!config.llm.openrouterKey) throw new Error('OPENROUTER_API_KEY is not set');
 
   for (let attempt = 1; attempt <= 2; attempt++) {

@@ -11,11 +11,16 @@ import { config } from '../config.js';
  * Word-level timings are not optional here — burnt captions and accurate clip
  * boundaries both depend on them.
  */
+export const TRANSCRIBE_PROVIDERS = ['groq', 'mock'];
+
 export async function transcribe(audioPath, { language } = {}) {
   switch (config.transcribe.provider) {
     case 'groq':  return groqTranscribe(audioPath, { language });
     case 'mock':  return mockTranscribe(audioPath);
-    default:      throw new Error(`unknown TRANSCRIBE_PROVIDER: ${config.transcribe.provider}`);
+    // Never put the value in the message: people paste API keys into the wrong
+    // variable, and an error that echoes it writes the secret into the logs and
+    // onto a page in the app.
+    default:      throw new Error(`TRANSCRIBE_PROVIDER is not one of ${TRANSCRIBE_PROVIDERS.join(' or ')}. If you meant to set a key, the variable is GROQ_API_KEY.`);
   }
 }
 

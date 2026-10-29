@@ -19,7 +19,9 @@ Clips are generated automatically after transcription, because that is what a ch
 
 Every item is its own card in the review queue: approve, reject with a reason, or schedule it on its own day. The clips are the commodity; the pack and the approval step are the product.
 
-**On YouTube links:** they generally do not work from a server. YouTube serves shared server addresses its "confirm you're not a bot" check, and nothing here tries to get around that. Upload the file, or link directly to it.
+**Where a recording can come from:** upload, or a link to Google Drive, Dropbox, OneDrive/SharePoint, Vimeo or a direct file. Share-page links are turned into the file behind them and checked for reachability before anything is queued. YouTube is the exception: it serves shared server addresses its "confirm you're not a bot" check, nothing here tries to get around that, and a YouTube link is refused at the form with the reason.
+
+**Storage:** the source recording is one to three gigabytes; its clips are a few megabytes and its transcript is a column in the database. So a source is deleted once its clips are rendered and it has aged past `SOURCE_RETENTION_HOURS` (default 72), and an upload that would not fit clears older sources out of the way first. If it still would not fit, the upload is refused with the numbers rather than dying halfway through with ENOSPC. `/health` reports free space.
 
 ---
 

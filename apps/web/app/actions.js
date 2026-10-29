@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest } from '../lib/data.js';
+import { normalizeSourceUrl, checkSourceUrl } from '@bs/core/source-url.js';
 
 // "12:30" or "750" or blank -> seconds or null. Churches think in mm:ss.
 function toSeconds(raw) {
@@ -14,28 +15,29 @@ function toSeconds(raw) {
   return parts.reduce((total, n) => total * 60 + n, 0);
 }
 
-// YouTube refuses downloads from shared server addresses, so a YouTube link
-// fails several minutes into the pipeline. Say so at the form instead.
-function isYoutube(url) {
-  try {
-    const h = new URL(url).hostname.replace(/^www\./, '');
-    return ['youtube.com', 'm.youtube.com', 'youtu.be', 'music.youtube.com'].includes(h);
-  } catch { return false; }
-}
-
 export async function newSermonAction(formData) {
   const title = String(formData.get('title') || '').trim();
-  const sourceUrl = String(formData.get('sourceUrl') || '').trim();
+  const rawUrl = String(formData.get('sourceUrl') || '').trim();
   const mode = String(formData.get('mode') || 'link');
   if (!title) return;
-  if (mode === 'link' && !sourceUrl) return;
-  if (mode === 'link' && isYoutube(sourceUrl)) redirect('/?problem=youtube');
+  if (mode === 'link' && !rawUrl) return;
+
+  // Resolve and test the link here, so a bad one fails in two seconds instead
+  // of five minutes into the pipeline.
+  let sourceUrl = null;
+  if (mode === 'link') {
+    const resolved = normalizeSourceUrl(rawUrl);
+    if (!resolved.ok) redirect(`/?problem=${encodeURIComponent(resolved.reason)}`);
+    const reachable = await checkSourceUrl(resolved.url);
+    if (!reachable.ok) redirect(`/?problem=${encodeURIComponent(reachable.reason)}`);
+    sourceUrl = resolved.url;
+  }
 
   const sermon = await createSermon({
     churchName: String(formData.get('churchName') || '').trim(),
     title,
     preacher: String(formData.get('preacher') || '').trim(),
-    sourceUrl: mode === 'link' ? sourceUrl : null,
+    sourceUrl,
     startS: toSeconds(formData.get('startAt')),
     endS: toSeconds(formData.get('endAt')),
     upload: mode === 'upload',

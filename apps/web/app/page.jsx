@@ -1,5 +1,6 @@
 import { listSermons } from '../lib/data.js';
 import { newSermonAction } from './actions.js';
+import { SUPPORTED_SOURCES } from '@bs/core/source-url.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,14 +16,7 @@ export default async function Home({ searchParams }) {
       <h1>Sundays</h1>
       <p className="sub">Paste a sermon link. You get clips, points, carousels, write-ups, a summary and a five-day devotional — all waiting for your approval.</p>
 
-      {params?.problem === 'youtube' && (
-        <div className="flag">
-          YouTube will not let a server download its videos — it asks automated downloads from shared
-          server addresses to sign in and prove they are not a bot, and that applies here no matter whose
-          video it is. Upload the recording instead, or paste a direct link to the video file. If your
-          church owns the channel, download the original from YouTube Studio and upload it.
-        </div>
-      )}
+      {params?.problem && <div className="flag">{String(params.problem)}</div>}
 
       {dbError && (
         <div className="flag">
@@ -36,8 +30,9 @@ export default async function Home({ searchParams }) {
           <label className="small" style={{ margin: 0 }}><input type="radio" name="mode" value="link" style={{ width: 'auto', minHeight: 0, marginRight: 6 }} /> Use a link</label>
         </div>
         <p className="small muted" style={{ margin: '6px 0 0' }}>
-          Uploading always works. A link works for a direct file (Drive, Dropbox, your own site);
-          YouTube usually refuses downloads from a server.
+          Uploading always works. Links work for {SUPPORTED_SOURCES.join(', ')} — share-page links are
+          turned into the file behind them and checked before anything is queued. YouTube does not allow
+          server downloads, so a YouTube link is refused.
         </p>
 
         <label htmlFor="sourceUrl">Link to the video file (only if using a link)</label>

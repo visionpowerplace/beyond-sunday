@@ -14,6 +14,11 @@ export const config = {
   // useful ceiling is roughly the container's vCPU count: past that the clips
   // just take turns and each one finishes later.
   concurrency: Math.max(1, Number(env.WORKER_CONCURRENCY || 3)),
+  // A source recording is kept this long after its clips are rendered, so the
+  // sermon window can be corrected and re-rendered the same day.
+  sourceRetentionHours: Number(env.SOURCE_RETENTION_HOURS || 72),
+  // Headroom kept free so an upload never dies halfway with ENOSPC.
+  minFreeBytes: Number(env.MIN_FREE_MB || 1500) * 1e6,
   workerPublicUrl: (env.WORKER_PUBLIC_URL || `http://localhost:${env.WORKER_PORT || 8080}`).replace(/\/$/, ''),
   brandName: env.BRAND_NAME || 'Beyond Sunday',
   // libass resolves this through fontconfig. The worker image installs DejaVu;

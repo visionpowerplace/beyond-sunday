@@ -14,7 +14,9 @@
     "./pipeline/transcribe.js": "./src/pipeline/transcribe.js",
     "./pipeline/generate.js": "./src/pipeline/generate.js",
     "./pipeline/render.js": "./src/pipeline/render.js",
-    "./pipeline/prompts.js": "./src/pipeline/prompts.js"
+    "./pipeline/prompts.js": "./src/pipeline/prompts.js",
+    "./source-url.js": "./src/source-url.js",
+    "./pipeline/cleanup.js": "./src/pipeline/cleanup.js"
   },
   "dependencies": {
     "postgres": "^3.4.5"

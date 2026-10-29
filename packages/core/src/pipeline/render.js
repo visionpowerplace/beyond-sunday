@@ -23,7 +23,11 @@ export async function runRenderClip(job) {
   const [item] = await sql`select * from items where id = ${job.item_id}`;
   if (!item) throw new Error(`item ${job.item_id} not found`);
   const [sermon] = await sql`select * from sermons where id = ${item.sermon_id}`;
-  if (!sermon?.source_path) throw new Error('sermon has no source video');
+  if (!sermon?.source_path) {
+    throw new Error(sermon?.source_cleaned_at
+      ? 'The original recording was cleared to free storage, so this clip cannot be re-rendered. The clips already made are still here; upload the recording again to make new ones.'
+      : 'sermon has no source video');
+  }
 
   const dir = path.join(config.storageDir, sermon.id, 'clips');
   await fs.promises.mkdir(dir, { recursive: true });

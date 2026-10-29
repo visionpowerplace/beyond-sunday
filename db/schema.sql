@@ -82,3 +82,7 @@ alter table sermons add column if not exists window_source  text;   -- 'manual' 
 alter table sermons add column if not exists upload_token text;
 
 alter table sermons alter column source_url drop not null;
+
+-- The source recording is deleted once its clips exist and it has aged out;
+-- this records when, so the page can explain why a re-render needs a re-upload.
+alter table sermons add column if not exists source_cleaned_at timestamptz;

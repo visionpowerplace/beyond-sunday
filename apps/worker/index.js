@@ -9,6 +9,7 @@ import { runIngest } from '@bs/core/pipeline/ingest.js';
 import { runTranscribe } from '@bs/core/pipeline/transcribe.js';
 import { runGenerate } from '@bs/core/pipeline/generate.js';
 import { runRenderClip } from '@bs/core/pipeline/render.js';
+import { diskFree, reclaimSpace, human } from '@bs/core/pipeline/cleanup.js';
 
 const WORKER_ID = `${process.env.RAILWAY_REPLICA_ID ?? 'local'}-${randomUUID().slice(0, 8)}`;
 const IDLE_MS = 3000;
@@ -40,6 +41,8 @@ const inFlight = new Map();
  */
 async function loop() {
   console.log(`[worker ${WORKER_ID}] up  ${describeProviders()}  concurrency=${config.concurrency}`);
+  sweepStorage();   // on boot, then hourly
+  setInterval(sweepStorage, 60 * 60 * 1000).unref();
 
   while (running) {
     if (inFlight.size >= config.concurrency) { await Promise.race(inFlight.values()); continue; }
@@ -66,6 +69,17 @@ async function loop() {
   }
 
   await Promise.allSettled(inFlight.values());
+}
+
+async function sweepStorage() {
+  try {
+    const before = await diskFree();
+    const { freedBytes, freedCount, free } = await reclaimSpace();
+    console.log(`[storage] ${human(free ?? before.free)} free of ${human(before.total)}`
+      + (freedCount ? `, cleared ${human(freedBytes)} from ${freedCount} old recording(s)` : ''));
+  } catch (err) {
+    console.error('[storage] sweep failed:', err.message);
+  }
 }
 
 async function runJob(job) {
@@ -123,6 +137,21 @@ async function handleUpload(req, res, url) {
   if (!sermon.upload_token) return fail(409, 'this sermon already has its recording; create a new one to replace it');
   if (sermon.upload_token !== token) return fail(403, 'that upload link is not valid for this sermon');
 
+  // A recording that dies halfway through with ENOSPC looks like a broken app.
+  // Check first, clear old sources out of the way, and say so if it still will
+  // not fit rather than letting the write fail.
+  const incoming = Number(req.headers['content-length']) || 0;
+  let { free } = await diskFree();
+  if (free < incoming + config.minFreeBytes) {
+    const reclaimed = await reclaimSpace({ needBytes: incoming });
+    free = reclaimed.free;
+    if (reclaimed.freedCount) console.log(`[storage] freed ${human(reclaimed.freedBytes)} from ${reclaimed.freedCount} old recording(s)`);
+  }
+  if (incoming && free < incoming + config.minFreeBytes) {
+    return fail(507, `Not enough storage for this file: it needs ${human(incoming)} and only ${human(free)} is free. `
+      + 'Delete some older sermons, or ask for a bigger volume.');
+  }
+
   const dir = path.join(config.storageDir, sermonId);
   await fs.promises.mkdir(dir, { recursive: true });
   const dest = path.join(dir, 'source.mp4');
@@ -141,7 +170,10 @@ async function handleUpload(req, res, url) {
     await fs.promises.rename(partial, dest);
   } catch (err) {
     await fs.promises.rm(partial, { force: true });
-    return fail(500, `upload failed: ${err.message}`);
+    const outOfSpace = err.code === 'ENOSPC' || /ENOSPC/.test(err.message);
+    return fail(outOfSpace ? 507 : 500, outOfSpace
+      ? 'The storage filled up partway through this upload. Older recordings are cleared automatically; try again in a moment, and if it keeps happening the volume needs to be bigger.'
+      : `upload failed: ${err.message}`);
   }
 
   await sql`update sermons set source_path = ${dest}, upload_token = null, status = 'ingesting', error = null, updated_at = now() where id = ${sermonId}`;
@@ -165,7 +197,11 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, worker: WORKER_ID, running: [...inFlight.keys()], concurrency: config.concurrency }));
+    const disk = await diskFree().catch(() => null);
+    return res.end(JSON.stringify({
+      ok: true, worker: WORKER_ID, running: [...inFlight.keys()], concurrency: config.concurrency,
+      storage: disk ? { free: human(disk.free), total: human(disk.total) } : null,
+    }));
   }
 
   if (url.pathname.startsWith('/files/')) {

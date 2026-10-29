@@ -126,11 +126,12 @@ function labelFor(status) {
   return {
     queued: 'Queued',
     awaiting_upload: 'Waiting for the file',
-    ingesting: 'Downloading the video',
+    ingesting: 'Fetching the video',
     transcribing: 'Transcribing',
-    generating: 'Writing the content pack',
+    generating: 'Writing',
     rendering: 'Rendering clips',
-  }[status] ?? status;
+    deleting: 'Deleting',
+  }[status] ?? status.replace(/_/g, ' ');
 }
 
 function ItemCard({ item, sermonId }) {

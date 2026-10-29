@@ -116,8 +116,20 @@ export default async function Home({ searchParams }) {
   );
 }
 
+// Database words are not status words. Nobody should read "awaiting_upload".
+const STATUS_LABELS = {
+  ready: 'ready to review',
+  failed: 'failed',
+  awaiting_upload: 'waiting for the file',
+  queued: 'queued',
+  ingesting: 'fetching the video',
+  transcribing: 'transcribing',
+  generating: 'writing',
+  rendering: 'rendering clips',
+  deleting: 'deleting',
+};
+
 function StatusPill({ status }) {
   const cls = status === 'ready' ? 'pill good' : status === 'failed' ? 'pill bad' : 'pill';
-  const label = status === 'ready' ? 'ready to review' : status;
-  return <span className={cls}>{label}</span>;
+  return <span className={cls}>{STATUS_LABELS[status] ?? status.replace(/_/g, ' ')}</span>;
 }

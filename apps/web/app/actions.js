@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest, deleteSermon } from '../lib/data.js';
+import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest, deleteSermon, deleteFailedSermons } from '../lib/data.js';
 import { normalizeSourceUrl, checkSourceUrl } from '@bs/core/source-url.js';
 
 // "12:30" or "750" or blank -> seconds or null. Churches think in mm:ss.
@@ -70,7 +70,14 @@ export async function retryAction(formData) {
 
 export async function deleteSermonAction(formData) {
   await deleteSermon(String(formData.get('sermonId')));
+  // From a sermon page there is nowhere to stay; from the list, stay put.
+  if (String(formData.get('stay') || '') === '1') return revalidatePath('/');
   redirect('/');
+}
+
+export async function deleteFailedAction() {
+  await deleteFailedSermons();
+  revalidatePath('/');
 }
 
 export async function approveAction(formData) {

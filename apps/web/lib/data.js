@@ -84,6 +84,13 @@ export async function deleteSermon(sermonId) {
   await enqueue({ type: 'delete_sermon', sermonId });
 }
 
+/** Clear out everything that failed, in one go. */
+export async function deleteFailedSermons() {
+  const rows = await sql`select id from sermons where status = 'failed'`;
+  for (const r of rows) await deleteSermon(r.id);
+  return rows.length;
+}
+
 export async function retryIngest(sermonId) {
   await sql`update sermons set status = 'queued', error = null, updated_at = now() where id = ${sermonId}`;
   await enqueue({ type: 'ingest', sermonId });

@@ -1,5 +1,5 @@
 import { listSermons, storageStatus } from '../lib/data.js';
-import { newSermonAction } from './actions.js';
+import { newSermonAction, deleteSermonAction, deleteFailedAction } from './actions.js';
 import { SUPPORTED_SOURCES } from '@bs/core/source-url.js';
 
 export const dynamic = 'force-dynamic';
@@ -11,6 +11,7 @@ export default async function Home({ searchParams }) {
   try { sermons = await listSermons(); }
   catch (err) { dbError = err.message; }
   const storage = await storageStatus();
+  const failedCount = sermons.filter(s => s.status === 'failed').length;
 
   return (
     <>
@@ -70,7 +71,17 @@ export default async function Home({ searchParams }) {
         </div>
       </form>
 
-      <h2>Recent</h2>
+      <div className="row">
+        <h2 style={{ marginBottom: 0 }}>Recent</h2>
+        <span className="spacer" />
+        {failedCount > 0 && (
+          <form action={deleteFailedAction}>
+            <button className="reject" style={{ minHeight: 32, padding: '4px 10px' }}>
+              Delete {failedCount} failed
+            </button>
+          </form>
+        )}
+      </div>
       {storage && (
         <p className="small muted" style={{ margin: 0 }}>
           Storage: {storage.free} free of {storage.total}. Recordings are cleared automatically a few days
@@ -79,11 +90,19 @@ export default async function Home({ searchParams }) {
       )}
       {!sermons.length && !dbError && <p className="muted small">Nothing yet.</p>}
       {sermons.map(s => (
-        <a key={s.id} href={`/sermon/${s.id}`} className="card" style={{ display: 'block', textDecoration: 'none' }}>
+        <div key={s.id} className="card">
           <div className="row">
-            <h3 style={{ margin: 0 }}>{s.title}</h3>
+            <h3 style={{ margin: 0 }}>
+              <a href={`/sermon/${s.id}`} style={{ textDecoration: 'none' }}>{s.title}</a>
+            </h3>
             <span className="spacer" />
             <StatusPill status={s.status} />
+            <form action={deleteSermonAction}>
+              <input type="hidden" name="sermonId" value={s.id} />
+              <input type="hidden" name="stay" value="1" />
+              <button className="reject" style={{ minHeight: 32, padding: '4px 10px' }}
+                      aria-label={`Delete ${s.title}`}>Delete</button>
+            </form>
           </div>
           <div className="small muted">
             {s.church_name}
@@ -91,7 +110,7 @@ export default async function Home({ searchParams }) {
             {Number(s.item_count) > 0 ? ` · ${s.approved_count}/${s.item_count} approved` : ''}
           </div>
           {s.status === 'failed' && s.error && <span className="flag">{s.error}</span>}
-        </a>
+        </div>
       ))}
     </>
   );

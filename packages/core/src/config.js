@@ -10,6 +10,10 @@ export const config = {
   databaseUrl: env.DATABASE_URL || '',
   storageDir: path.resolve(env.STORAGE_DIR || './storage'),
   workerPort: Number(env.WORKER_PORT || 8080),
+  // How many jobs one worker runs at once. Rendering is CPU-bound, so the
+  // useful ceiling is roughly the container's vCPU count: past that the clips
+  // just take turns and each one finishes later.
+  concurrency: Math.max(1, Number(env.WORKER_CONCURRENCY || 3)),
   workerPublicUrl: (env.WORKER_PUBLIC_URL || `http://localhost:${env.WORKER_PORT || 8080}`).replace(/\/$/, ''),
   brandName: env.BRAND_NAME || 'Beyond Sunday',
   // libass resolves this through fontconfig. The worker image installs DejaVu;
@@ -18,6 +22,10 @@ export const config = {
   // 'fit'  = whole frame on a blurred backdrop; nobody is ever cropped out.
   // 'crop' = centre crop, fills the screen, cuts the sides off.
   clipLayout: env.CLIP_LAYOUT || 'fit',
+  // 1080 or 720 wide. Every network re-encodes what you upload, so 720x1280
+  // is what most vertical video ends up as anyway — and it is roughly half
+  // the render time.
+  clipWidth: env.CLIP_WIDTH === '720' ? 720 : 1080,
 
   transcribe: {
     provider: env.TRANSCRIBE_PROVIDER || 'mock',

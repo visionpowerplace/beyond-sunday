@@ -15,7 +15,7 @@ import { run } from './ingest.js';
  * function and no amount of tuning changes that.
  */
 
-const W = 1080, H = 1920;
+const W = config.clipWidth, H = Math.round((config.clipWidth * 16) / 9);
 const PAD = 0.3;            // air at each end so the clip does not clip a word
 const WORDS_PER_CUE = 3;
 
@@ -106,8 +106,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,${config.captionFont},86,&H00FFFFFF,&H00FFFFFF,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,6,2,2,80,80,420,1
-Style: Verse,${config.captionFont},52,&H00D7B46A,&H00D7B46A,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,5,0,2,80,80,300,1
+Style: Caption,${config.captionFont},${px(86)},&H00FFFFFF,&H00FFFFFF,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,${px(6)},${px(2)},2,${px(80)},${px(80)},${px(420)},1
+Style: Verse,${config.captionFont},${px(52)},&H00D7B46A,&H00D7B46A,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,${px(5)},0,2,${px(80)},${px(80)},${px(300)},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -127,6 +127,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   }
   return header + events.join('\n') + '\n';
 }
+
+// Caption geometry is authored against a 1080-wide frame; scale it with W so
+// a 720 render looks the same, not like 1080 captions shrunk.
+const px = n => Math.round((n * W) / 1080);
 
 function ts(seconds) {
   const s = Math.max(0, seconds);
@@ -156,9 +160,15 @@ function filterGraph(assPath) {
         + `${ass},format=yuv420p[out]`,
     ].join(';');
   }
+  // The backdrop is blurred at a fraction of the size and scaled back up.
+  // Blurring 1080x1920 directly costs more than everything else in the graph
+  // put together, and once it is this out of focus nobody can tell which way
+  // it was done — the upscale is itself a blur.
+  const bgW = 192, bgH = Math.round((bgW * H) / W);
   return [
     `[0:v]split=2[bg][fg]`,
-    `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=26,eq=brightness=-0.14[bgb]`,
+    `[bg]scale=${bgW}:${bgH}:force_original_aspect_ratio=increase,crop=${bgW}:${bgH},`
+      + `gblur=sigma=6,scale=${W}:${H}:flags=bilinear,eq=brightness=-0.14[bgb]`,
     `[fg]scale=${W}:-2[fgs]`,
     `[bgb][fgs]overlay=(W-w)/2:(H-h)/2[stacked]`,
     `[stacked]${ass},format=yuv420p[out]`,

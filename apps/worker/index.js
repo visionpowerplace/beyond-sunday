@@ -29,11 +29,21 @@ const STAGE_STATUS = {
 };
 
 let running = true;
-let current = null;
+const inFlight = new Map();
 
+/**
+ * Several jobs at once, from one queue.
+ *
+ * Rendering six clips one after another was most of the wait. claimNext uses
+ * FOR UPDATE SKIP LOCKED, so workers and the slots inside a worker never claim
+ * the same job, and nothing here needs a lock of its own.
+ */
 async function loop() {
-  console.log(`[worker ${WORKER_ID}] up  ${describeProviders()}`);
+  console.log(`[worker ${WORKER_ID}] up  ${describeProviders()}  concurrency=${config.concurrency}`);
+
   while (running) {
+    if (inFlight.size >= config.concurrency) { await Promise.race(inFlight.values()); continue; }
+
     let job;
     try {
       job = await claimNext(WORKER_ID);
@@ -43,88 +53,44 @@ async function loop() {
       continue;
     }
 
-    if (!job) { await sleep(IDLE_MS); continue; }
+    if (!job) {
+      // Nothing waiting: idle only if nothing is running, otherwise loop back
+      // and pick up the slot the moment a job finishes.
+      if (inFlight.size) await Promise.race(inFlight.values());
+      else await sleep(IDLE_MS);
+      continue;
+    }
 
-    current = job;
-    const started = Date.now();
-    console.log(`[job ${job.id}] ${job.type} attempt ${job.attempts}`);
-    try {
-      const handler = HANDLERS[job.type];
-      if (!handler) throw new Error(`no handler for job type ${job.type}`);
-      if (job.sermon_id && STAGE_STATUS[job.type]) {
-        await sql`update sermons set status = ${STAGE_STATUS[job.type]}, error = null, updated_at = now()
-                  where id = ${job.sermon_id} and status <> 'ready'`;
-      }
-      const result = await handler(job);
-      await finishJob(job.id);
-      console.log(`[job ${job.id}] done in ${((Date.now() - started) / 1000).toFixed(1)}s`, result ?? '');
-    } catch (err) {
-      const { exhausted } = await failJob(job, err);
-      console.error(`[job ${job.id}] ${exhausted ? 'FAILED for good' : 'failed, will retry'}: ${err.message}`);
-      // A sermon whose pipeline is dead should say so in the UI, not sit on
-      // "processing" forever. Silent failure is the complaint every tool in
-      // this market gets.
-      if (exhausted && job.sermon_id) {
-        await sql`update sermons set status = 'failed', error = ${String(err.message).slice(0, 1000)}, updated_at = now() where id = ${job.sermon_id}`;
-      }
-    } finally {
-      current = null;
+    const task = runJob(job).finally(() => inFlight.delete(job.id));
+    inFlight.set(job.id, task);
+  }
+
+  await Promise.allSettled(inFlight.values());
+}
+
+async function runJob(job) {
+  const started = Date.now();
+  console.log(`[job ${job.id}] ${job.type} attempt ${job.attempts}`);
+  try {
+    const handler = HANDLERS[job.type];
+    if (!handler) throw new Error(`no handler for job type ${job.type}`);
+    if (job.sermon_id && STAGE_STATUS[job.type]) {
+      await sql`update sermons set status = ${STAGE_STATUS[job.type]}, error = null, updated_at = now()
+                where id = ${job.sermon_id} and status <> 'ready'`;
+    }
+    const result = await handler(job);
+    await finishJob(job.id);
+    console.log(`[job ${job.id}] done in ${((Date.now() - started) / 1000).toFixed(1)}s`, result ?? '');
+  } catch (err) {
+    const { exhausted } = await failJob(job, err);
+    console.error(`[job ${job.id}] ${exhausted ? 'FAILED for good' : 'failed, will retry'}: ${err.message}`);
+    // A sermon whose pipeline is dead should say so in the UI, not sit on
+    // "processing" forever. Silent failure is the complaint every tool in
+    // this market gets.
+    if (exhausted && job.sermon_id) {
+      await sql`update sermons set status = 'failed', error = ${String(err.message).slice(0, 1000)}, updated_at = now() where id = ${job.sermon_id}`;
     }
   }
-}
-
-function cors(res) {
-  res.setHeader('access-control-allow-origin', '*');
-  res.setHeader('access-control-allow-methods', 'GET, PUT, OPTIONS');
-  res.setHeader('access-control-allow-headers', 'content-type');
-}
-
-/**
- * PUT /upload/<sermonId>?token=...  with the file as the raw body.
- *
- * The token is minted on the sermon row when the web app creates it and is
- * cleared the moment the upload lands, so a link cannot be reused and nobody
- * can write to the volume without having created a sermon first.
- */
-async function handleUpload(req, res, url) {
-  const sermonId = url.pathname.slice('/upload/'.length);
-  const token = url.searchParams.get('token');
-  const fail = (code, msg) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: msg })); };
-
-  if (!/^[0-9a-f-]{36}$/i.test(sermonId)) return fail(400, 'bad sermon id');
-  if (!token) return fail(401, 'missing token');
-
-  const [sermon] = await sql`select id, upload_token from sermons where id = ${sermonId}`;
-  if (!sermon) return fail(404, 'no such sermon');
-  if (!sermon.upload_token) return fail(409, 'this sermon already has its recording; create a new one to replace it');
-  if (sermon.upload_token !== token) return fail(403, 'that upload link is not valid for this sermon');
-
-  const dir = path.join(config.storageDir, sermonId);
-  await fs.promises.mkdir(dir, { recursive: true });
-  const dest = path.join(dir, 'source.mp4');
-  const partial = dest + '.part';
-
-  try {
-    await new Promise((resolve, reject) => {
-      const out = fs.createWriteStream(partial);
-      req.pipe(out);
-      req.on('error', reject);
-      out.on('error', reject);
-      out.on('finish', resolve);
-    });
-    // Only becomes the source once it is completely written: a half-uploaded
-    // file that ffmpeg then chokes on is a confusing way to fail.
-    await fs.promises.rename(partial, dest);
-  } catch (err) {
-    await fs.promises.rm(partial, { force: true });
-    return fail(500, `upload failed: ${err.message}`);
-  }
-
-  await sql`update sermons set source_path = ${dest}, upload_token = null, status = 'ingesting', error = null, updated_at = now() where id = ${sermonId}`;
-  await enqueue({ type: 'ingest', sermonId });
-
-  res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ ok: true }));
 }
 
 /**
@@ -145,7 +111,7 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, worker: WORKER_ID, job: current?.id ?? null }));
+    return res.end(JSON.stringify({ ok: true, worker: WORKER_ID, running: [...inFlight.keys()], concurrency: config.concurrency }));
   }
 
   if (url.pathname.startsWith('/files/')) {
@@ -188,7 +154,7 @@ server.listen(config.workerPort, () => console.log(`[worker] files on :${config.
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, async () => {
-    console.log(`[worker] ${sig}, finishing current job then stopping`);
+    console.log(`[worker] ${sig}, finishing ${inFlight.size} running job(s) then stopping`);
     running = false;
     server.close();
     // The in-flight job keeps its lock; the stale sweep reclaims it if we die here.

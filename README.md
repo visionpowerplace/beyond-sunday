@@ -35,6 +35,8 @@ tests/e2e.mjs        transcribe -> generate -> render against a real database
 
 **The queue is Postgres**, not Redis: `FOR UPDATE SKIP LOCKED`, retries with square-number backoff, and a stale sweep that reclaims a job whose worker died. A sermon whose pipeline is exhausted is marked `failed` with the reason, because the loudest complaint about every tool in this market is a post that silently never happened.
 
+**Render speed.** A 30-second clip takes about 18 seconds on two cores. The backdrop blur runs at 192px wide and is scaled back up, which costs a third of blurring the full frame and looks identical. `CLIP_WIDTH=720` roughly halves render time again and is what the networks re-encode your upload to anyway; the default is 1080. `WORKER_CONCURRENCY` (default 3) runs several jobs at once — it does little for rendering, which already uses every core, but it stops one slow download or LLM call blocking the queue behind it.
+
 **Rendering is a container, not a function.** A 60-minute sermon is one to three gigabytes and ffmpeg will not finish inside a serverless timeout. That is why the worker is its own Railway service with a volume.
 
 ---

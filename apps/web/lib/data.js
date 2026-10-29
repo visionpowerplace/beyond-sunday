@@ -4,11 +4,11 @@ import { config } from '@bs/core/config.js';
 import { randomUUID } from 'node:crypto';
 
 export const KINDS = [
-  { key: 'clip',       label: 'Clips',        blurb: 'Vertical, captioned, ready to post' },
-  { key: 'highlight',  label: 'Highlight points', blurb: 'The arguments the sermon actually made' },
-  { key: 'carousel',   label: 'Carousels',    blurb: 'One per point, slide by slide' },
-  { key: 'writeup',    label: 'Write-ups',    blurb: 'Short posts built on each point' },
-  { key: 'summary',    label: 'Summary',      blurb: 'For whoever missed Sunday' },
+  { key: 'clip',       label: 'Clips',               blurb: 'Vertical, captioned, ready to post' },
+  { key: 'highlight',  label: 'Highlight points',    blurb: 'The arguments the sermon actually made' },
+  { key: 'carousel',   label: 'Carousels',           blurb: 'One per point, slide by slide' },
+  { key: 'writeup',    label: 'Write-ups',           blurb: 'Short posts built on each point' },
+  { key: 'summary',    label: 'Summary',             blurb: 'For whoever missed Sunday' },
   { key: 'devotional', label: 'Five-day devotional', blurb: 'Monday to Friday, one point a day' },
 ];
 
@@ -63,13 +63,19 @@ export async function setWindow(sermonId, startS, endS) {
 }
 
 /**
- * Re-run the content pack against the current window. The transcript is kept —
- * it is the expensive part and the audio has not changed — so this costs one
- * LLM call and a re-render of the new clips.
+ * Generate one or more deliverable types. The transcript is kept — it is the
+ * expensive part and the audio has not changed — so each of these costs a
+ * single call.
  */
-export async function regenerate(sermonId) {
+export async function generateKinds(sermonId, kinds) {
   await sql`update sermons set status = 'generating', error = null, updated_at = now() where id = ${sermonId}`;
-  await enqueue({ type: 'generate', sermonId });
+  await enqueue({ type: 'generate', sermonId, payload: { kinds } });
+}
+
+/** Which deliverables this sermon already has, so the page knows what to offer. */
+export async function presentKinds(sermonId) {
+  const rows = await sql`select distinct kind from items where sermon_id = ${sermonId}`;
+  return new Set(rows.map(r => r.kind));
 }
 
 export async function retryIngest(sermonId) {

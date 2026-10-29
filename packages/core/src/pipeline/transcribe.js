@@ -22,6 +22,6 @@ export async function runTranscribe(job) {
       updated_at = now()
     where id = ${sermon.id}`;
 
-  await enqueue({ type: 'generate', sermonId: sermon.id });
+  await enqueue({ type: 'generate', sermonId: sermon.id, payload: { kinds: ['clip'] } });
   return { words: result.words.length, scripture: scripture.length };
 }

@@ -3,7 +3,8 @@ import { newSermonAction } from './actions.js';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Home() {
+export default async function Home({ searchParams }) {
+  const params = await searchParams;
   let sermons = [];
   let dbError = null;
   try { sermons = await listSermons(); }
@@ -13,6 +14,15 @@ export default async function Home() {
     <>
       <h1>Sundays</h1>
       <p className="sub">Paste a sermon link. You get clips, points, carousels, write-ups, a summary and a five-day devotional — all waiting for your approval.</p>
+
+      {params?.problem === 'youtube' && (
+        <div className="flag">
+          YouTube will not let a server download its videos — it asks automated downloads from shared
+          server addresses to sign in and prove they are not a bot, and that applies here no matter whose
+          video it is. Upload the recording instead, or paste a direct link to the video file. If your
+          church owns the channel, download the original from YouTube Studio and upload it.
+        </div>
+      )}
 
       {dbError && (
         <div className="flag">

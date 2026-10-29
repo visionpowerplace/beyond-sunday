@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createSermon, setItemStatus, scheduleItem, setWindow, regenerate, retryIngest } from '../lib/data.js';
+import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest } from '../lib/data.js';
 
 // "12:30" or "750" or blank -> seconds or null. Churches think in mm:ss.
 function toSeconds(raw) {
@@ -14,12 +14,22 @@ function toSeconds(raw) {
   return parts.reduce((total, n) => total * 60 + n, 0);
 }
 
+// YouTube refuses downloads from shared server addresses, so a YouTube link
+// fails several minutes into the pipeline. Say so at the form instead.
+function isYoutube(url) {
+  try {
+    const h = new URL(url).hostname.replace(/^www\./, '');
+    return ['youtube.com', 'm.youtube.com', 'youtu.be', 'music.youtube.com'].includes(h);
+  } catch { return false; }
+}
+
 export async function newSermonAction(formData) {
   const title = String(formData.get('title') || '').trim();
   const sourceUrl = String(formData.get('sourceUrl') || '').trim();
   const mode = String(formData.get('mode') || 'link');
   if (!title) return;
   if (mode === 'link' && !sourceUrl) return;
+  if (mode === 'link' && isYoutube(sourceUrl)) redirect('/?problem=youtube');
 
   const sermon = await createSermon({
     churchName: String(formData.get('churchName') || '').trim(),
@@ -36,13 +46,17 @@ export async function newSermonAction(formData) {
 export async function setWindowAction(formData) {
   const id = String(formData.get('sermonId'));
   await setWindow(id, toSeconds(formData.get('startAt')), toSeconds(formData.get('endAt')));
-  await regenerate(id);
+  // Only redo what already exists: changing the window should not quietly
+  // bill for deliverables this church never asked for.
+  const existing = formData.getAll('existing').map(String);
+  await generateKinds(id, existing.length ? existing : ['clip']);
   revalidatePath(`/sermon/${id}`);
 }
 
-export async function regenerateAction(formData) {
+export async function generateKindAction(formData) {
   const id = String(formData.get('sermonId'));
-  await regenerate(id);
+  const kind = String(formData.get('kind'));
+  await generateKinds(id, [kind]);
   revalidatePath(`/sermon/${id}`);
 }
 

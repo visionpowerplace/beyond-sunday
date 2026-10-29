@@ -2,7 +2,7 @@
 
 One sermon in, a week of content out — and nothing goes public until a human approves it.
 
-Paste a YouTube link. The pipeline downloads the service, transcribes it with word-level timings, and turns that one transcript into a **content pack**:
+Upload a sermon. The pipeline transcribes it with word-level timings, then makes **clips first** — and everything else only when you ask for it, one call each:
 
 | Box | What it is |
 | --- | --- |
@@ -13,7 +13,13 @@ Paste a YouTube link. The pipeline downloads the service, transcribes it with wo
 | Summary | 150 words for whoever missed Sunday |
 | Five-day devotional | Monday to Friday, each day a different part of the message |
 
+Carousels and write-ups are built on the highlight points, so asking for either one makes the points first if they are not there yet.
+
+Clips are generated automatically after transcription, because that is what a church is waiting for. The rest sit behind buttons on the sermon page: a church that only wants a devotional pays for one call, not six.
+
 Every item is its own card in the review queue: approve, reject with a reason, or schedule it on its own day. The clips are the commodity; the pack and the approval step are the product.
+
+**On YouTube links:** they generally do not work from a server. YouTube serves shared server addresses its "confirm you're not a bot" check, and nothing here tries to get around that. Upload the file, or link directly to it.
 
 ---
 

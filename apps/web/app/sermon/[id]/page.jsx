@@ -1,5 +1,5 @@
 import { getSermon, getItems, assetUrl, uploadUrl, KINDS } from '../../../lib/data.js';
-import { approveAction, rejectAction, scheduleAction, setWindowAction, regenerateAction, retryAction } from '../../actions.js';
+import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction } from '../../actions.js';
 import { notFound } from 'next/navigation';
 import UploadBox from '../../upload-box.jsx';
 
@@ -13,6 +13,8 @@ export default async function SermonPage({ params }) {
 
   const working = ['queued', 'ingesting', 'transcribing', 'generating', 'rendering'].includes(sermon.status);
   const upload = uploadUrl(sermon);
+  const present = [...new Set(items.map(i => i.kind))];
+  const missing = KINDS.filter(k => !present.includes(k.key));
 
   return (
     <>
@@ -63,6 +65,7 @@ export default async function SermonPage({ params }) {
           </p>
           <form action={setWindowAction} className="row">
             <input type="hidden" name="sermonId" value={sermon.id} />
+            {present.map(k => <input key={k} type="hidden" name="existing" value={k} />)}
             <div style={{ flex: 1, minWidth: 140 }}>
               <label htmlFor="startAt" className="small">Starts at</label>
               <input id="startAt" name="startAt" defaultValue={clock(sermon.sermon_start_s)} placeholder="0:00" />
@@ -73,27 +76,48 @@ export default async function SermonPage({ params }) {
             </div>
             <button style={{ alignSelf: 'flex-end' }}>Use these times and redo</button>
           </form>
-          <form action={regenerateAction} style={{ marginTop: 8 }}>
-            <input type="hidden" name="sermonId" value={sermon.id} />
-            <button className="small">Make a different set of content</button>
-          </form>
-          <p className="small muted">Redoing keeps the transcript, so it is quick and costs one call.</p>
+          <p className="small muted">Redoing keeps the transcript, so it is quick and only redoes what you already have.</p>
         </div>
       )}
 
-      {KINDS.map(kind => {
+      {KINDS.filter(k => present.includes(k.key)).map(kind => {
         const group = items.filter(i => i.kind === kind.key);
-        if (!group.length) return null;
         return (
           <section key={kind.key}>
-            <h2>{kind.label}</h2>
+            <div className="row">
+              <h2 style={{ marginBottom: 0 }}>{kind.label}</h2>
+              <span className="spacer" />
+              <form action={generateKindAction}>
+                <input type="hidden" name="sermonId" value={sermon.id} />
+                <input type="hidden" name="kind" value={kind.key} />
+                <button className="small" style={{ minHeight: 32, padding: '4px 10px' }}>Redo</button>
+              </form>
+            </div>
             <p className="small muted" style={{ margin: 0 }}>{kind.blurb}</p>
             {group.map(item => <ItemCard key={item.id} item={item} sermonId={sermon.id} />)}
           </section>
         );
       })}
 
-      {!items.length && !working && <p className="muted">No items yet.</p>}
+      {sermon.transcript && missing.length > 0 && (
+        <section>
+          <h2>Add to this sermon</h2>
+          <p className="small muted" style={{ margin: 0 }}>
+            Made only when you ask. Each takes about a minute and uses the transcript you already have.
+          </p>
+          <div className="card">
+            <div className="row">
+              {missing.map(kind => (
+                <form action={generateKindAction} key={kind.key}>
+                  <input type="hidden" name="sermonId" value={sermon.id} />
+                  <input type="hidden" name="kind" value={kind.key} />
+                  <button>{kind.label}</button>
+                </form>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
     </>
   );
 }

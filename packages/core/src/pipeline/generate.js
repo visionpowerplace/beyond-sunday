@@ -1,83 +1,171 @@
 import { sql } from '../db.js';
 import { enqueue } from '../queue.js';
 import { completeJson } from '../providers/llm.js';
-import { CONTENT_PACK_SYSTEM, contentPackUser, LOCATE_SYSTEM, locateUser } from './prompts.js';
+import { BASE_SYSTEM, KINDS, buildUser, LOCATE_SYSTEM, locateUser } from './prompts.js';
 
 /**
- * Stage 3 — one sermon becomes a content pack.
+ * Stage 3 — make one kind of thing from the sermon.
  *
- * Everything here comes out of the transcript we already paid to make, which is
- * why the pack costs barely more than the clips alone. Each produced thing
- * becomes an `items` row: its own card in the review queue, approved and
- * scheduled on its own.
+ * A job carries `kinds`: the first run after transcription asks for clips
+ * only, so the church sees video as fast as possible. Everything else is
+ * generated when someone asks for it, each as its own call. Someone who only
+ * wants a devotional pays for one call, not six.
  */
 export async function runGenerate(job) {
-  const [sermon] = await sql`select s.*, c.name as church_name from sermons s join churches c on c.id = s.church_id where s.id = ${job.sermon_id}`;
+  const [sermon] = await sql`
+    select s.*, c.name as church_name from sermons s join churches c on c.id = s.church_id
+    where s.id = ${job.sermon_id}`;
   if (!sermon?.transcript) throw new Error('sermon has no transcript; transcribe must run first');
 
-  const t = sermon.transcript;
-  const allSegments = t.segments ?? [];
+  const kinds = (job.payload?.kinds?.length ? job.payload.kinds : ['clip']).filter(k => KINDS[k]);
+  if (!kinds.length) throw new Error(`nothing to generate: ${JSON.stringify(job.payload?.kinds)}`);
 
-  // Find the preaching inside a full service, unless a human already said.
-  const win = await resolveWindow(sermon, allSegments);
-  const segments = allSegments.filter(s => s.end > win.start && s.start < win.end);
+  const t = sermon.transcript;
+  const all = t.segments ?? [];
+  const win = await resolveWindow(sermon, all);
+  const segments = all.filter(s => s.end > win.start && s.start < win.end);
   if (!segments.length) throw new Error('the chosen sermon window contains no speech — check the start and end times');
 
-  const pack = (await completeJson({
-    system: CONTENT_PACK_SYSTEM,
-    user: contentPackUser({
-      title: sermon.title,
-      preacher: sermon.preacher,
-      church: sermon.church_name,
-      durationS: win.end - win.start,
-      transcriptText: t.text,
-      segments: capSegments(segments),
-      scripture: t.scripture ?? [],
-    }),
-    maxTokens: 12000,
-  })) ?? mockPack({ ...t, segments });
+  const context = {
+    title: sermon.title,
+    preacher: sermon.preacher,
+    church: sermon.church_name,
+    durationS: win.end - win.start,
+    segments: capSegments(segments),
+    scripture: t.scripture ?? [],
+  };
 
-  const rows = toItems(pack, sermon, t).map(r =>
-    // Never let a clip wander outside the preaching, whatever the model returned.
-    r.kind === 'clip'
-      ? { ...r, start_s: Math.max(win.start, r.start_s), end_s: Math.min(win.end, r.end_s) }
-      : r)
-    .filter(r => r.kind !== 'clip' || r.end_s - r.start_s >= 5);
-  if (!rows.length) throw new Error('the model returned an empty pack');
+  const made = {};
+  for (const kind of kinds) {
+    // Carousels and write-ups are built on the points, so make those first if
+    // they are not there yet rather than failing or inventing new ones.
+    const highlights = KINDS[kind].needsHighlights ? await ensureHighlights(sermon, context, t, win) : null;
+    const rows = await generateKind({ kind, sermon, context, transcript: t, win, highlights });
+    await replaceItems(sermon.id, kind, rows);
+    made[kind] = rows.length;
+  }
 
+  if (made.clip) {
+    const clips = await sql`select id from items where sermon_id = ${sermon.id} and kind = 'clip' order by ordinal`;
+    for (const c of clips) await enqueue({ type: 'render_clip', sermonId: sermon.id, itemId: c.id });
+  }
+  await settleStatus(sermon.id);
+  return made;
+}
+
+async function generateKind({ kind, sermon, context, transcript, win, highlights }) {
+  const data = (await completeJson({
+    system: BASE_SYSTEM,
+    user: buildUser({ kind, ...context, highlights }),
+    maxTokens: KINDS[kind].maxTokens,
+  })) ?? mockFor(kind, context);
+
+  const rows = toItems(kind, data, sermon, transcript);
+
+  if (kind === 'clip') {
+    const musicFlag = data.music_warning ? ['music_under_speech'] : [];
+    return rows
+      .map(r => ({
+        ...r,
+        start_s: Math.max(win.start, r.start_s),
+        end_s: Math.min(win.end, r.end_s),
+        flags: sql.json([...(r._flags ?? []), ...musicFlag]),
+      }))
+      .filter(r => r.end_s - r.start_s >= 5)
+      .map(({ _flags, ...r }) => r);
+  }
+  return rows.map(({ _flags, ...r }) => r);
+}
+
+async function ensureHighlights(sermon, context, transcript, win) {
+  const existing = await sql`select title, body from items where sermon_id = ${sermon.id} and kind = 'highlight' order by ordinal`;
+  if (existing.length) return existing.map(h => ({ point: h.title, explain: h.body?.explain ?? '' }));
+
+  const rows = await generateKind({ kind: 'highlight', sermon, context, transcript, win, highlights: null });
+  await replaceItems(sermon.id, 'highlight', rows);
+  return rows.map(r => ({ point: r.title, explain: r.body?.explain ?? '' }));
+}
+
+async function replaceItems(sermonId, kind, rows) {
   await sql.begin(async tx => {
-    await tx`delete from items where sermon_id = ${sermon.id}`;
+    await tx`delete from items where sermon_id = ${sermonId} and kind = ${kind}`;
     for (const r of rows) {
       await tx`insert into items ${tx(r, 'sermon_id','kind','ordinal','title','body','start_s','end_s','score','scripture','flags')}`;
     }
-    await tx`update sermons set status = 'rendering', updated_at = now() where id = ${sermon.id}`;
   });
+}
 
-  // Only clips need the renderer. Text and carousels are ready to review now,
-  // which is the point: the pastor can start approving while video is still cooking.
-  const clips = await sql`select id from items where sermon_id = ${sermon.id} and kind = 'clip' order by ordinal`;
-  for (const c of clips) await enqueue({ type: 'render_clip', sermonId: sermon.id, itemId: c.id });
-  if (!clips.length) await sql`update sermons set status = 'ready' where id = ${sermon.id}`;
+/** Ready once nothing is still rendering. */
+async function settleStatus(sermonId) {
+  const [{ pending }] = await sql`
+    select count(*)::int as pending from items
+    where sermon_id = ${sermonId} and kind = 'clip' and asset_path is null`;
+  await sql`update sermons set status = ${pending ? 'rendering' : 'ready'}, updated_at = now() where id = ${sermonId}`;
+}
 
-  return { items: rows.length, clips: clips.length, musicWarning: !!pack.music_warning };
+function toItems(kind, data, sermon, transcript) {
+  const base = { sermon_id: sermon.id };
+  const empty = { start_s: null, end_s: null, score: null, scripture: sql.json([]), flags: sql.json([]) };
+
+  if (kind === 'clip') return (data.clips ?? []).map((c, i) => ({
+    ...base, kind, ordinal: i,
+    title: c.title ?? `Clip ${i + 1}`,
+    body: sql.json({ hook: c.hook ?? '', caption: c.caption ?? '' }),
+    start_s: Math.max(0, Number(c.start_s) || 0),
+    end_s: Number(c.end_s) || 0,
+    score: Math.min(100, Math.max(0, Number(c.score) || 0)),
+    scripture: sql.json(refsWithTime(c.scripture_refs, transcript)),
+    flags: sql.json([]),
+    _flags: c.flags ?? [],
+  }));
+
+  if (kind === 'highlight') return (data.highlights ?? []).map((h, i) => ({
+    ...base, kind, ordinal: i, ...empty,
+    title: h.point ?? `Point ${i + 1}`,
+    body: sql.json({ explain: h.explain ?? '', quote: h.quote ?? '', quote_at_s: h.quote_at_s ?? null }),
+    scripture: sql.json(refsWithTime(h.scripture_refs, transcript)),
+  }));
+
+  if (kind === 'carousel') return (data.carousels ?? []).map((c, i) => ({
+    ...base, kind, ordinal: i, ...empty,
+    title: c.title ?? `Carousel ${i + 1}`,
+    body: sql.json({ slides: c.slides ?? [], caption: c.caption ?? '', highlight_index: c.highlight_index ?? i }),
+  }));
+
+  if (kind === 'writeup') return (data.writeups ?? []).map((w, i) => ({
+    ...base, kind, ordinal: i, ...empty,
+    title: w.title ?? `Write-up ${i + 1}`,
+    body: sql.json({ text: w.body ?? '', caption: w.caption ?? '', highlight_index: w.highlight_index ?? i }),
+  }));
+
+  if (kind === 'summary') return data.summary ? [{
+    ...base, kind, ordinal: 0, ...empty,
+    title: data.summary.title ?? sermon.title,
+    body: sql.json({ text: data.summary.body ?? '', caption: data.summary.caption ?? '' }),
+  }] : [];
+
+  if (kind === 'devotional') return (data.devotional ?? []).map((d, i) => ({
+    ...base, kind, ordinal: Number(d.day) || i + 1, ...empty,
+    title: d.title ?? `Day ${i + 1}`,
+    body: sql.json({ text: d.body ?? '', question: d.question ?? '', prayer: d.prayer ?? '', day: Number(d.day) || i + 1 }),
+    scripture: sql.json(refsWithTime(d.scripture_ref ? [d.scripture_ref] : [], transcript)),
+  }));
+
+  return [];
 }
 
 /**
  * Which part of the recording is the sermon.
  *
  * A manual window always wins: if a person typed the times, they watched it and
- * we did not. Otherwise one cheap call over the segment list finds the teaching
- * block, and if the model says it is unsure we fall back to the whole recording
- * rather than silently cutting the wrong half.
+ * we did not. Otherwise one cheap call finds the teaching block, and if the
+ * model is unsure we use the whole recording rather than cutting the wrong half.
  */
 async function resolveWindow(sermon, segments) {
   const full = { start: 0, end: Number(sermon.duration_s) || (segments.at(-1)?.end ?? 0) };
 
   if (sermon.sermon_start_s != null || sermon.sermon_end_s != null) {
-    return {
-      start: Number(sermon.sermon_start_s ?? 0),
-      end: Number(sermon.sermon_end_s ?? full.end),
-    };
+    return { start: Number(sermon.sermon_start_s ?? 0), end: Number(sermon.sermon_end_s ?? full.end) };
   }
   if (!segments.length) return full;
 
@@ -85,26 +173,23 @@ async function resolveWindow(sermon, segments) {
   try {
     found = await completeJson({ system: LOCATE_SYSTEM, user: locateUser({ segments }), maxTokens: 800, temperature: 0.1 });
   } catch {
-    found = null;   // locating is a convenience; never fail the pack over it
+    found = null;   // locating is a convenience; never fail the work over it
   }
 
-  const start = Number(found?.start_s);
-  const end = Number(found?.end_s);
+  const start = Number(found?.start_s), end = Number(found?.end_s);
   const sane = found?.confident && Number.isFinite(start) && Number.isFinite(end)
     && end - start > 120 && start >= 0 && end <= full.end + 1;
-
   const win = sane ? { start, end: Math.min(end, full.end) } : full;
 
   await sql`
     update sermons set sermon_start_s = ${win.start}, sermon_end_s = ${win.end},
       window_source = ${sane ? 'auto' : 'auto-fullservice'}, updated_at = now()
     where id = ${sermon.id}`;
-
   return win;
 }
 
-// A 90-minute service can overflow the context. Segments are already compact;
-// this keeps the newest-to-oldest balance by sampling evenly rather than truncating the end.
+// A 90-minute service can overflow the context; sample evenly rather than
+// truncating, so the end of the sermon is not simply lost.
 function capSegments(segments, maxChars = 90_000) {
   const total = segments.reduce((n, s) => n + s.text.length + 20, 0);
   if (total <= maxChars) return segments;
@@ -112,97 +197,23 @@ function capSegments(segments, maxChars = 90_000) {
   return segments.filter((_, i) => i % keepEvery === 0);
 }
 
-function toItems(pack, sermon, transcript) {
-  const rows = [];
-  const base = { sermon_id: sermon.id };
-  const musicFlag = pack.music_warning ? ['music_under_speech'] : [];
-
-  (pack.clips ?? []).forEach((c, i) => {
-    const start = Math.max(0, Number(c.start_s) || 0);
-    const end = Number(c.end_s) || 0;
-    if (end - start < 5) return;  // nothing under five seconds is a clip
-    rows.push({
-      ...base, kind: 'clip', ordinal: i,
-      title: c.title ?? `Clip ${i + 1}`,
-      body: sql.json({ hook: c.hook ?? '', caption: c.caption ?? '' }),
-      start_s: start, end_s: end,
-      score: clamp(Number(c.score) || 0),
-      scripture: sql.json(refsWithTime(c.scripture_refs, transcript)),
-      flags: sql.json([...(c.flags ?? []), ...musicFlag]),
-    });
-  });
-
-  (pack.highlights ?? []).forEach((h, i) => rows.push({
-    ...base, kind: 'highlight', ordinal: i,
-    title: h.point ?? `Point ${i + 1}`,
-    body: sql.json({ explain: h.explain ?? '', quote: h.quote ?? '', quote_at_s: h.quote_at_s ?? null }),
-    start_s: null, end_s: null, score: null,
-    scripture: sql.json(refsWithTime(h.scripture_refs, transcript)),
-    flags: sql.json([]),
-  }));
-
-  (pack.carousels ?? []).forEach((c, i) => rows.push({
-    ...base, kind: 'carousel', ordinal: i,
-    title: c.title ?? `Carousel ${i + 1}`,
-    body: sql.json({ slides: c.slides ?? [], caption: c.caption ?? '', highlight_index: c.highlight_index ?? i }),
-    start_s: null, end_s: null, score: null, scripture: sql.json([]), flags: sql.json([]),
-  }));
-
-  (pack.writeups ?? []).forEach((w, i) => rows.push({
-    ...base, kind: 'writeup', ordinal: i,
-    title: w.title ?? `Write-up ${i + 1}`,
-    body: sql.json({ text: w.body ?? '', caption: w.caption ?? '', highlight_index: w.highlight_index ?? i }),
-    start_s: null, end_s: null, score: null, scripture: sql.json([]), flags: sql.json([]),
-  }));
-
-  if (pack.summary) rows.push({
-    ...base, kind: 'summary', ordinal: 0,
-    title: pack.summary.title ?? sermon.title,
-    body: sql.json({ text: pack.summary.body ?? '', caption: pack.summary.caption ?? '' }),
-    start_s: null, end_s: null, score: null, scripture: sql.json([]), flags: sql.json([]),
-  });
-
-  (pack.devotional ?? []).forEach((d, i) => rows.push({
-    ...base, kind: 'devotional', ordinal: Number(d.day) || i + 1,
-    title: d.title ?? `Day ${i + 1}`,
-    body: sql.json({ text: d.body ?? '', question: d.question ?? '', prayer: d.prayer ?? '', day: Number(d.day) || i + 1 }),
-    start_s: null, end_s: null, score: null,
-    scripture: sql.json(refsWithTime(d.scripture_ref ? [d.scripture_ref] : [], transcript)),
-    flags: sql.json([]),
-  }));
-
-  return rows;
-}
-
 // Only keeps references the detector also heard in the audio. A reference the
-// model produced that nobody actually said is the exact mistake we will not ship.
+// model produced that nobody said is the exact mistake we will not ship.
 function refsWithTime(refs, transcript) {
   const heard = new Map((transcript.scripture ?? []).map(s => [norm(s.ref), s]));
-  return (refs ?? [])
-    .map(r => heard.get(norm(r)) ?? { ref: r, start_s: null, unverified: true })
-    .filter(Boolean);
+  return (refs ?? []).map(r => heard.get(norm(r)) ?? { ref: r, start_s: null, unverified: true });
 }
-
 const norm = r => String(r).toLowerCase().replace(/\s+/g, ' ').trim();
-const clamp = n => Math.min(100, Math.max(0, n));
 
-// Mock mode: enough structure to build and test the UI against, obviously fake.
-function mockPack(t) {
-  const segs = t.segments ?? [];
-  const pick = segs.slice(0, 4);
+// Mock mode: enough structure to build the UI against, obviously fake.
+function mockFor(kind, context) {
+  const segs = context.segments ?? [];
   return {
-    clips: pick.map((s, i) => ({
-      title: `Mock clip ${i + 1}`,
-      hook: s.text.slice(0, 60),
-      start_s: s.start, end_s: Math.min(s.start + 30, s.end + 25),
-      score: 50, flags: [], caption: '[mock mode] set LLM_PROVIDER=openrouter for real captions.',
-      scripture_refs: [],
-    })),
-    highlights: [{ point: 'Mock highlight', explain: '[mock mode]', quote: pick[0]?.text ?? '', quote_at_s: 0, scripture_refs: [] }],
-    carousels: [{ highlight_index: 0, title: 'Mock carousel', slides: [{ heading: 'Mock', body: '[mock mode]' }], caption: '[mock mode]' }],
-    writeups: [{ highlight_index: 0, title: 'Mock write-up', body: '[mock mode]', caption: '[mock mode]' }],
-    summary: { title: 'Mock summary', body: '[mock mode]', caption: '[mock mode]' },
-    devotional: [1, 2, 3, 4, 5].map(day => ({ day, title: `Mock day ${day}`, scripture_ref: '', body: '[mock mode]', question: '?', prayer: '[mock mode]' })),
-    music_warning: false,
-  };
+    clip: { clips: segs.slice(0, 4).map((s, i) => ({ title: `Mock clip ${i + 1}`, hook: s.text.slice(0, 60), start_s: s.start, end_s: Math.min(s.start + 30, s.end + 25), score: 50, flags: [], caption: '[mock mode]', scripture_refs: [] })), music_warning: false },
+    highlight: { highlights: [{ point: 'Mock highlight', explain: '[mock mode]', quote: segs[0]?.text ?? '', quote_at_s: 0, scripture_refs: [] }] },
+    carousel: { carousels: [{ highlight_index: 0, title: 'Mock carousel', slides: [{ heading: 'Mock', body: '[mock mode]' }], caption: '[mock mode]' }] },
+    writeup: { writeups: [{ highlight_index: 0, title: 'Mock write-up', body: '[mock mode]', caption: '[mock mode]' }] },
+    summary: { summary: { title: 'Mock summary', body: '[mock mode]', caption: '[mock mode]' } },
+    devotional: { devotional: [1, 2, 3, 4, 5].map(day => ({ day, title: `Mock day ${day}`, scripture_ref: '', body: '[mock mode]', question: '?', prayer: '[mock mode]' })) },
+  }[kind] ?? {};
 }

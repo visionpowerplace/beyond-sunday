@@ -1,6 +1,7 @@
-import { getSermon, getItems, assetUrl, KINDS } from '../../../lib/data.js';
-import { approveAction, rejectAction, scheduleAction } from '../../actions.js';
+import { getSermon, getItems, assetUrl, uploadUrl, KINDS } from '../../../lib/data.js';
+import { approveAction, rejectAction, scheduleAction, setWindowAction, regenerateAction, retryAction } from '../../actions.js';
 import { notFound } from 'next/navigation';
+import UploadBox from '../../upload-box.jsx';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,7 @@ export default async function SermonPage({ params }) {
   const items = await getItems(id);
 
   const working = ['queued', 'ingesting', 'transcribing', 'generating', 'rendering'].includes(sermon.status);
+  const upload = uploadUrl(sermon);
 
   return (
     <>
@@ -29,7 +31,55 @@ export default async function SermonPage({ params }) {
           </div>
         </div>
       )}
-      {sermon.status === 'failed' && <div className="flag">This sermon failed: {sermon.error}</div>}
+      {upload && (
+        <div className="card">
+          <h3>Upload the recording</h3>
+          <p className="small muted" style={{ marginTop: 0 }}>
+            It goes straight to the processing server, not through this page. Video or audio, any length.
+          </p>
+          <UploadBox url={upload} />
+        </div>
+      )}
+
+      {sermon.status === 'failed' && (
+        <div className="card">
+          <span className="flag">{sermon.error}</span>
+          <form action={retryAction}>
+            <input type="hidden" name="sermonId" value={sermon.id} />
+            <button>Try again</button>
+          </form>
+        </div>
+      )}
+
+      {sermon.transcript && (
+        <div className="card">
+          <h3>Where the preaching is</h3>
+          <p className="small muted" style={{ marginTop: 0 }}>
+            {sermon.window_source === 'manual'
+              ? 'Set by you.'
+              : sermon.window_source === 'auto'
+                ? 'Found automatically. Correct it if it caught the worship or missed the start.'
+                : 'Using the whole recording.'}
+          </p>
+          <form action={setWindowAction} className="row">
+            <input type="hidden" name="sermonId" value={sermon.id} />
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <label htmlFor="startAt" className="small">Starts at</label>
+              <input id="startAt" name="startAt" defaultValue={clock(sermon.sermon_start_s)} placeholder="0:00" />
+            </div>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <label htmlFor="endAt" className="small">Ends at</label>
+              <input id="endAt" name="endAt" defaultValue={clock(sermon.sermon_end_s)} placeholder="1:18:30" />
+            </div>
+            <button style={{ alignSelf: 'flex-end' }}>Use these times and redo</button>
+          </form>
+          <form action={regenerateAction} style={{ marginTop: 8 }}>
+            <input type="hidden" name="sermonId" value={sermon.id} />
+            <button className="small">Make a different set of content</button>
+          </form>
+          <p className="small muted">Redoing keeps the transcript, so it is quick and costs one call.</p>
+        </div>
+      )}
 
       {KINDS.map(kind => {
         const group = items.filter(i => i.kind === kind.key);
@@ -51,6 +101,7 @@ export default async function SermonPage({ params }) {
 function labelFor(status) {
   return {
     queued: 'Queued',
+    awaiting_upload: 'Waiting for the file',
     ingesting: 'Downloading the video',
     transcribing: 'Transcribing',
     generating: 'Writing the content pack',
@@ -162,6 +213,15 @@ function flagText(f) {
     sensitive: 'Pastoral or sensitive content — check before this goes public.',
     music_under_speech: 'There is worship music in this service. Clips over music get muted or claimed on YouTube and Instagram.',
   }[f] ?? f;
+}
+
+// Seconds to h:mm:ss for an input someone will edit by hand.
+function clock(s) {
+  if (s == null) return '';
+  const t = Math.round(Number(s));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+  const mm = h ? String(m).padStart(2, '0') : String(m);
+  return `${h ? h + ':' : ''}${mm}:${String(sec).padStart(2, '0')}`;
 }
 
 const fmt = s => {

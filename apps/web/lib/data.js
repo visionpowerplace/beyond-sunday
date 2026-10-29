@@ -1,6 +1,7 @@
 import { sql } from '@bs/core/db.js';
 import { enqueue } from '@bs/core/queue.js';
 import { config } from '@bs/core/config.js';
+import { randomUUID } from 'node:crypto';
 
 export const KINDS = [
   { key: 'clip',       label: 'Clips',        blurb: 'Vertical, captioned, ready to post' },
@@ -38,14 +39,47 @@ export async function getOrCreateChurch(name) {
   return made;
 }
 
-export async function createSermon({ churchName, title, preacher, sourceUrl }) {
+export async function createSermon({ churchName, title, preacher, sourceUrl, startS, endS, upload }) {
   const church = await getOrCreateChurch(churchName || 'My church');
+  const token = upload ? randomUUID() : null;
+
   const [sermon] = await sql`
-    insert into sermons (church_id, title, preacher, source_url, status)
-    values (${church.id}, ${title}, ${preacher || null}, ${sourceUrl}, 'queued')
+    insert into sermons (church_id, title, preacher, source_url, sermon_start_s, sermon_end_s, window_source, upload_token, status)
+    values (${church.id}, ${title}, ${preacher || null}, ${sourceUrl || null},
+            ${startS ?? null}, ${endS ?? null}, ${startS != null || endS != null ? 'manual' : null},
+            ${token}, ${upload ? 'awaiting_upload' : 'queued'})
     returning *`;
-  await enqueue({ type: 'ingest', sermonId: sermon.id });
+
+  // An upload enqueues itself once the file actually lands on the volume.
+  if (!upload) await enqueue({ type: 'ingest', sermonId: sermon.id });
   return sermon;
+}
+
+export async function setWindow(sermonId, startS, endS) {
+  await sql`
+    update sermons set sermon_start_s = ${startS ?? null}, sermon_end_s = ${endS ?? null},
+      window_source = 'manual', updated_at = now()
+    where id = ${sermonId}`;
+}
+
+/**
+ * Re-run the content pack against the current window. The transcript is kept —
+ * it is the expensive part and the audio has not changed — so this costs one
+ * LLM call and a re-render of the new clips.
+ */
+export async function regenerate(sermonId) {
+  await sql`update sermons set status = 'generating', error = null, updated_at = now() where id = ${sermonId}`;
+  await enqueue({ type: 'generate', sermonId });
+}
+
+export async function retryIngest(sermonId) {
+  await sql`update sermons set status = 'queued', error = null, updated_at = now() where id = ${sermonId}`;
+  await enqueue({ type: 'ingest', sermonId });
+}
+
+export function uploadUrl(sermon) {
+  if (!sermon.upload_token) return null;
+  return `${config.workerPublicUrl}/upload/${sermon.id}?token=${sermon.upload_token}`;
 }
 
 export async function setItemStatus(id, status, reason) {

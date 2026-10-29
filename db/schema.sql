@@ -68,3 +68,17 @@ create table if not exists jobs (
 create index if not exists jobs_pickup_idx on jobs (status, run_after) where status = 'queued';
 create index if not exists items_sermon_idx on items (sermon_id, kind, ordinal);
 create index if not exists sermons_church_idx on sermons (church_id, created_at desc);
+
+-- Added after the first deploy. Idempotent so db:init can run on every release.
+
+-- Where the preaching actually is inside a full-service recording. Null means
+-- "not decided yet"; the generate stage fills it in if nobody set it by hand.
+alter table sermons add column if not exists sermon_start_s numeric;
+alter table sermons add column if not exists sermon_end_s   numeric;
+alter table sermons add column if not exists window_source  text;   -- 'manual' | 'auto'
+
+-- One-shot token proving a browser is allowed to upload this sermon's file.
+-- Cleared the moment the upload lands.
+alter table sermons add column if not exists upload_token text;
+
+alter table sermons alter column source_url drop not null;

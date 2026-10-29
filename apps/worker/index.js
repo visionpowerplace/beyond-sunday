@@ -4,7 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { config, describeProviders } from '@bs/core/config.js';
 import { sql, closeDb } from '@bs/core/db.js';
-import { claimNext, finishJob, failJob } from '@bs/core/queue.js';
+import { claimNext, finishJob, failJob, enqueue } from '@bs/core/queue.js';
 import { runIngest } from '@bs/core/pipeline/ingest.js';
 import { runTranscribe } from '@bs/core/pipeline/transcribe.js';
 import { runGenerate } from '@bs/core/pipeline/generate.js';
@@ -73,12 +73,75 @@ async function loop() {
   }
 }
 
+function cors(res) {
+  res.setHeader('access-control-allow-origin', '*');
+  res.setHeader('access-control-allow-methods', 'GET, PUT, OPTIONS');
+  res.setHeader('access-control-allow-headers', 'content-type');
+}
+
+/**
+ * PUT /upload/<sermonId>?token=...  with the file as the raw body.
+ *
+ * The token is minted on the sermon row when the web app creates it and is
+ * cleared the moment the upload lands, so a link cannot be reused and nobody
+ * can write to the volume without having created a sermon first.
+ */
+async function handleUpload(req, res, url) {
+  const sermonId = url.pathname.slice('/upload/'.length);
+  const token = url.searchParams.get('token');
+  const fail = (code, msg) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: msg })); };
+
+  if (!/^[0-9a-f-]{36}$/i.test(sermonId)) return fail(400, 'bad sermon id');
+  if (!token) return fail(401, 'missing token');
+
+  const [sermon] = await sql`select id, upload_token from sermons where id = ${sermonId}`;
+  if (!sermon) return fail(404, 'no such sermon');
+  if (!sermon.upload_token) return fail(409, 'this sermon already has its recording; create a new one to replace it');
+  if (sermon.upload_token !== token) return fail(403, 'that upload link is not valid for this sermon');
+
+  const dir = path.join(config.storageDir, sermonId);
+  await fs.promises.mkdir(dir, { recursive: true });
+  const dest = path.join(dir, 'source.mp4');
+  const partial = dest + '.part';
+
+  try {
+    await new Promise((resolve, reject) => {
+      const out = fs.createWriteStream(partial);
+      req.pipe(out);
+      req.on('error', reject);
+      out.on('error', reject);
+      out.on('finish', resolve);
+    });
+    // Only becomes the source once it is completely written: a half-uploaded
+    // file that ffmpeg then chokes on is a confusing way to fail.
+    await fs.promises.rename(partial, dest);
+  } catch (err) {
+    await fs.promises.rm(partial, { force: true });
+    return fail(500, `upload failed: ${err.message}`);
+  }
+
+  await sql`update sermons set source_path = ${dest}, upload_token = null, status = 'ingesting', error = null, updated_at = now() where id = ${sermonId}`;
+  await enqueue({ type: 'ingest', sermonId });
+
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ ok: true }));
+}
+
 /**
  * The worker also serves what it rendered. The web app is a separate service
  * with its own filesystem, so it links here rather than trying to read the volume.
  */
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+
+  // The browser uploads straight here, so the recording never passes through
+  // the web service. A 2GB service video has no business going through Next.js.
+  cors(res);
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+
+  if (req.method === 'PUT' && url.pathname.startsWith('/upload/')) {
+    return handleUpload(req, res, url);
+  }
 
   if (url.pathname === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });

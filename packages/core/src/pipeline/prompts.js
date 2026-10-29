@@ -99,3 +99,17 @@ function fmt(s) {
   const m = Math.floor(t / 60), sec = t % 60;
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
+
+export const LOCATE_SYSTEM = `You are given the timestamped transcript of a church service. Find where the preaching is.
+
+A full service recording usually runs: welcome, worship songs, announcements, offering, the sermon, an altar call, a closing. You are looking for the teaching block only — one person speaking continuously, developing an argument, usually the longest unbroken stretch of speech in the recording.
+
+Do NOT include: sung worship, the song lyrics between verses, announcements, the offering appeal, the welcome, the benediction. A short prayer immediately before or after the sermon may be included if it runs straight into the teaching.
+
+If the recording is only the sermon with nothing else around it, return the whole thing.
+If you genuinely cannot tell where the teaching starts, say so rather than guessing.`;
+
+export function locateUser({ segments }) {
+  const timeline = segments.map(s => `[${fmt(s.start)}-${fmt(s.end)}] ${s.text.trim()}`).join('\n');
+  return `TRANSCRIPT\n${timeline}\n\nReturn JSON:\n{\n  "start_s": 0,        // seconds, where the preaching begins\n  "end_s": 0,          // seconds, where it ends\n  "confident": true,   // false if you are unsure\n  "reason": "one sentence on what marked the boundaries",\n  "contains_singing": true/false   // true if sung worship appears anywhere in the recording\n}\n\nReturn only the JSON object.`;
+}

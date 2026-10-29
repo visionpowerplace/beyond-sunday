@@ -1,7 +1,7 @@
 import { sql } from '../db.js';
 import { enqueue } from '../queue.js';
 import { completeJson } from '../providers/llm.js';
-import { CONTENT_PACK_SYSTEM, contentPackUser } from './prompts.js';
+import { CONTENT_PACK_SYSTEM, contentPackUser, LOCATE_SYSTEM, locateUser } from './prompts.js';
 
 /**
  * Stage 3 — one sermon becomes a content pack.
@@ -16,21 +16,33 @@ export async function runGenerate(job) {
   if (!sermon?.transcript) throw new Error('sermon has no transcript; transcribe must run first');
 
   const t = sermon.transcript;
+  const allSegments = t.segments ?? [];
+
+  // Find the preaching inside a full service, unless a human already said.
+  const win = await resolveWindow(sermon, allSegments);
+  const segments = allSegments.filter(s => s.end > win.start && s.start < win.end);
+  if (!segments.length) throw new Error('the chosen sermon window contains no speech — check the start and end times');
+
   const pack = (await completeJson({
     system: CONTENT_PACK_SYSTEM,
     user: contentPackUser({
       title: sermon.title,
       preacher: sermon.preacher,
       church: sermon.church_name,
-      durationS: Number(sermon.duration_s) || null,
+      durationS: win.end - win.start,
       transcriptText: t.text,
-      segments: capSegments(t.segments ?? []),
+      segments: capSegments(segments),
       scripture: t.scripture ?? [],
     }),
     maxTokens: 12000,
-  })) ?? mockPack(t);
+  })) ?? mockPack({ ...t, segments });
 
-  const rows = toItems(pack, sermon, t);
+  const rows = toItems(pack, sermon, t).map(r =>
+    // Never let a clip wander outside the preaching, whatever the model returned.
+    r.kind === 'clip'
+      ? { ...r, start_s: Math.max(win.start, r.start_s), end_s: Math.min(win.end, r.end_s) }
+      : r)
+    .filter(r => r.kind !== 'clip' || r.end_s - r.start_s >= 5);
   if (!rows.length) throw new Error('the model returned an empty pack');
 
   await sql.begin(async tx => {
@@ -48,6 +60,47 @@ export async function runGenerate(job) {
   if (!clips.length) await sql`update sermons set status = 'ready' where id = ${sermon.id}`;
 
   return { items: rows.length, clips: clips.length, musicWarning: !!pack.music_warning };
+}
+
+/**
+ * Which part of the recording is the sermon.
+ *
+ * A manual window always wins: if a person typed the times, they watched it and
+ * we did not. Otherwise one cheap call over the segment list finds the teaching
+ * block, and if the model says it is unsure we fall back to the whole recording
+ * rather than silently cutting the wrong half.
+ */
+async function resolveWindow(sermon, segments) {
+  const full = { start: 0, end: Number(sermon.duration_s) || (segments.at(-1)?.end ?? 0) };
+
+  if (sermon.sermon_start_s != null || sermon.sermon_end_s != null) {
+    return {
+      start: Number(sermon.sermon_start_s ?? 0),
+      end: Number(sermon.sermon_end_s ?? full.end),
+    };
+  }
+  if (!segments.length) return full;
+
+  let found = null;
+  try {
+    found = await completeJson({ system: LOCATE_SYSTEM, user: locateUser({ segments }), maxTokens: 800, temperature: 0.1 });
+  } catch {
+    found = null;   // locating is a convenience; never fail the pack over it
+  }
+
+  const start = Number(found?.start_s);
+  const end = Number(found?.end_s);
+  const sane = found?.confident && Number.isFinite(start) && Number.isFinite(end)
+    && end - start > 120 && start >= 0 && end <= full.end + 1;
+
+  const win = sane ? { start, end: Math.min(end, full.end) } : full;
+
+  await sql`
+    update sermons set sermon_start_s = ${win.start}, sermon_end_s = ${win.end},
+      window_source = ${sane ? 'auto' : 'auto-fullservice'}, updated_at = now()
+    where id = ${sermon.id}`;
+
+  return win;
 }
 
 // A 90-minute service can overflow the context. Segments are already compact;

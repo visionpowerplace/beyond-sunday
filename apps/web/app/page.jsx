@@ -21,8 +21,17 @@ export default async function Home() {
       )}
 
       <form action={newSermonAction} className="card">
-        <label htmlFor="sourceUrl">YouTube link to the sermon</label>
-        <input id="sourceUrl" name="sourceUrl" required placeholder="https://www.youtube.com/watch?v=..." />
+        <div className="row" style={{ gap: 16 }}>
+          <label className="small" style={{ margin: 0 }}><input type="radio" name="mode" value="upload" defaultChecked style={{ width: 'auto', minHeight: 0, marginRight: 6 }} /> Upload the recording</label>
+          <label className="small" style={{ margin: 0 }}><input type="radio" name="mode" value="link" style={{ width: 'auto', minHeight: 0, marginRight: 6 }} /> Use a link</label>
+        </div>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          Uploading always works. A link works for a direct file (Drive, Dropbox, your own site);
+          YouTube usually refuses downloads from a server.
+        </p>
+
+        <label htmlFor="sourceUrl">Link to the video file (only if using a link)</label>
+        <input id="sourceUrl" name="sourceUrl" placeholder="https://..." />
         <label htmlFor="title">Sermon title</label>
         <input id="title" name="title" required placeholder="A Power In Silence" />
         <div className="row">
@@ -35,6 +44,21 @@ export default async function Home() {
             <input id="churchName" name="churchName" placeholder="The Empowerment Center" />
           </div>
         </div>
+        <div className="row">
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <label htmlFor="startAt">Sermon starts at</label>
+            <input id="startAt" name="startAt" placeholder="e.g. 42:10 — leave blank to find it" />
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <label htmlFor="endAt">Sermon ends at</label>
+            <input id="endAt" name="endAt" placeholder="e.g. 1:18:30" />
+          </div>
+        </div>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          Full service recording? Give the times and only the preaching is used. Leave them blank and
+          the preaching block is found for you — you can correct it afterwards.
+        </p>
+
         <div style={{ marginTop: 14 }}>
           <button className="primary" type="submit">Make this week&rsquo;s content</button>
         </div>

@@ -78,6 +78,12 @@ export async function presentKinds(sermonId) {
   return new Set(rows.map(r => r.kind));
 }
 
+export async function deleteSermon(sermonId) {
+  // The files live on the worker's volume, so the worker does the deleting.
+  await sql`update sermons set status = 'deleting', updated_at = now() where id = ${sermonId}`;
+  await enqueue({ type: 'delete_sermon', sermonId });
+}
+
 export async function retryIngest(sermonId) {
   await sql`update sermons set status = 'queued', error = null, updated_at = now() where id = ${sermonId}`;
   await enqueue({ type: 'ingest', sermonId });
@@ -102,6 +108,16 @@ export async function scheduleItem(id, when, networks) {
       status = case when ${when ? true : false} then 'scheduled' else status end,
       updated_at = now()
     where id = ${id}`;
+}
+
+/** Free space, read from the worker — the web service cannot see the volume. */
+export async function storageStatus() {
+  try {
+    const res = await fetch(`${config.workerPublicUrl}/health`, { signal: AbortSignal.timeout(4000), cache: 'no-store' });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body.storage ?? null;
+  } catch { return null; }
 }
 
 export const assetUrl = p => (p ? `${config.workerPublicUrl}/files/${p.split('/').map(encodeURIComponent).join('/')}` : null);

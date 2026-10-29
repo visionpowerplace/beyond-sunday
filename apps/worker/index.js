@@ -9,7 +9,7 @@ import { runIngest } from '@bs/core/pipeline/ingest.js';
 import { runTranscribe } from '@bs/core/pipeline/transcribe.js';
 import { runGenerate } from '@bs/core/pipeline/generate.js';
 import { runRenderClip } from '@bs/core/pipeline/render.js';
-import { diskFree, reclaimSpace, human } from '@bs/core/pipeline/cleanup.js';
+import { diskFree, reclaimSpace, human, runDeleteSermon } from '@bs/core/pipeline/cleanup.js';
 
 const WORKER_ID = `${process.env.RAILWAY_REPLICA_ID ?? 'local'}-${randomUUID().slice(0, 8)}`;
 const IDLE_MS = 3000;
@@ -19,6 +19,7 @@ const HANDLERS = {
   transcribe: runTranscribe,
   generate: runGenerate,
   render_clip: runRenderClip,
+  delete_sermon: runDeleteSermon,
 };
 
 // What the church sees while each job runs. Keeps the page honest on a retry.
@@ -27,6 +28,7 @@ const STAGE_STATUS = {
   transcribe: 'transcribing',
   generate: 'generating',
   render_clip: 'rendering',
+  delete_sermon: 'deleting',
 };
 
 let running = true;

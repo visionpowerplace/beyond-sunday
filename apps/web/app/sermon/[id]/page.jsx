@@ -1,5 +1,5 @@
 import { getSermon, getItems, assetUrl, uploadUrl, KINDS } from '../../../lib/data.js';
-import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction } from '../../actions.js';
+import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction } from '../../actions.js';
 import { notFound } from 'next/navigation';
 import UploadBox from '../../upload-box.jsx';
 

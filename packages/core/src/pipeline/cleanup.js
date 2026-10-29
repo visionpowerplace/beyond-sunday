@@ -76,4 +76,38 @@ async function dropSource(sermon) {
   return bytes;
 }
 
-export const human = b => (b == null ? '?' : `${(b / 1e9).toFixed(2)}GB`);
+export const human = b =>
+  b == null ? '?'
+  : b >= 1e9 ? `${(b / 1e9).toFixed(2)}GB`
+  : b >= 1e6 ? `${Math.round(b / 1e6)}MB`
+  : `${Math.round(b / 1e3)}KB`;
+
+/**
+ * Delete a sermon outright: its folder, its clips, its row.
+ *
+ * Retention only clears sources that have aged out, which is no help when a
+ * volume fills with today's test runs. This is the deliberate version.
+ */
+export async function runDeleteSermon(job) {
+  const id = job.sermon_id;
+  const dir = path.join(config.storageDir, id);
+  let bytes = 0;
+  try {
+    bytes = await dirSize(dir);
+    await fs.promises.rm(dir, { recursive: true, force: true });
+  } catch (err) {
+    // A missing folder is not a reason to keep the row around.
+    if (err.code !== 'ENOENT') throw err;
+  }
+  await sql`delete from sermons where id = ${id}`;
+  return { freed: human(bytes) };
+}
+
+async function dirSize(dir) {
+  let total = 0;
+  for (const entry of await fs.promises.readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    total += entry.isDirectory() ? await dirSize(full) : (await fs.promises.stat(full)).size;
+  }
+  return total;
+}

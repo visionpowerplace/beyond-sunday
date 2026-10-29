@@ -1,4 +1,4 @@
-import { listSermons } from '../lib/data.js';
+import { listSermons, storageStatus } from '../lib/data.js';
 import { newSermonAction } from './actions.js';
 import { SUPPORTED_SOURCES } from '@bs/core/source-url.js';
 
@@ -10,6 +10,7 @@ export default async function Home({ searchParams }) {
   let dbError = null;
   try { sermons = await listSermons(); }
   catch (err) { dbError = err.message; }
+  const storage = await storageStatus();
 
   return (
     <>
@@ -70,6 +71,12 @@ export default async function Home({ searchParams }) {
       </form>
 
       <h2>Recent</h2>
+      {storage && (
+        <p className="small muted" style={{ margin: 0 }}>
+          Storage: {storage.free} free of {storage.total}. Recordings are cleared automatically a few days
+          after their clips are made; delete a sermon to free its space now.
+        </p>
+      )}
       {!sermons.length && !dbError && <p className="muted small">Nothing yet.</p>}
       {sermons.map(s => (
         <a key={s.id} href={`/sermon/${s.id}`} className="card" style={{ display: 'block', textDecoration: 'none' }}>

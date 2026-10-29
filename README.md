@@ -68,9 +68,14 @@ You need `ffmpeg` and `yt-dlp` on PATH locally. The worker's Dockerfile installs
 ### Run the tests
 
 ```bash
-# a real video and a real database, providers mocked
+# the whole pipeline: a real video and a real database, providers mocked
 TEST_SOURCE=/path/to/any.mp4 DATABASE_URL=... node tests/e2e.mjs
+
+# boots the worker and hits every endpoint it serves
+DATABASE_URL=... STORAGE_DIR=./storage node tests/worker-smoke.mjs
 ```
+
+Run the smoke test after touching `apps/worker/index.js`. `node --check` passes on a file whose handler functions have been deleted; only a running process catches that.
 
 ---
 

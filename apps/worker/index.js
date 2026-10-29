@@ -39,8 +39,27 @@ const inFlight = new Map();
  * FOR UPDATE SKIP LOCKED, so workers and the slots inside a worker never claim
  * the same job, and nothing here needs a lock of its own.
  */
+/**
+ * Apply the schema before anything else.
+ *
+ * The web service does this too, in its pre-deploy. Whichever of the two boots
+ * first wins and the other is a no-op, which is the point: the worker used to
+ * come up against a database the web service had not migrated yet and spend an
+ * hour logging errors about a missing column.
+ */
+async function migrate() {
+  try {
+    const schema = await fs.promises.readFile(new URL('../../db/schema.sql', import.meta.url), 'utf8');
+    await sql.unsafe(schema);
+    console.log('[worker] schema up to date');
+  } catch (err) {
+    console.error('[worker] could not apply the schema:', err.message);
+  }
+}
+
 async function loop() {
   console.log(`[worker ${WORKER_ID}] up  ${describeProviders()}  concurrency=${config.concurrency}`);
+  await migrate();
   sweepStorage();   // on boot, then hourly
   setInterval(sweepStorage, 60 * 60 * 1000).unref();
 

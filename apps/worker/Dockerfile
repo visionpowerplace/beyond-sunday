@@ -20,6 +20,7 @@ RUN npm install --omit=dev --workspaces --include-workspace-root
 
 COPY packages/core packages/core
 COPY apps/worker apps/worker
+COPY db db
 
 ENV STORAGE_DIR=/data
 ENV NODE_ENV=production

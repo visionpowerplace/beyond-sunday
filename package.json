@@ -1,0 +1,22 @@
+{
+  "name": "beyond-sunday",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "db:init": "node scripts/db-init.js",
+    "worker": "npm -w @bs/worker run start",
+    "web": "npm -w @bs/web run dev",
+    "sermon:new": "node scripts/new-sermon.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "postgres": "^3.4.9"
+  }
+}

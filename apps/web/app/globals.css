@@ -1,0 +1,67 @@
+/* Phone first. The person approving these is a pastor on a sofa, not a
+   designer at a desk. Big tap targets, one column, nothing to learn. */
+:root {
+  --ink: #16140f;
+  --muted: #6d6758;
+  --line: #e3dfd4;
+  --paper: #faf8f3;
+  --card: #ffffff;
+  --gold: #a9802f;
+  --good: #1f7a4d;
+  --bad: #9b2c2c;
+  --warn: #8a5a0b;
+  --warn-bg: #fdf3df;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 80px; }
+header.top { border-bottom: 1px solid var(--line); background: var(--card); }
+header.top .wrap { padding: 16px; display: flex; align-items: baseline; gap: 10px; }
+.brand { font-weight: 700; letter-spacing: -0.015em; }
+.brand span { color: var(--gold); }
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.02em; }
+h2 { font-size: 1.1rem; margin: 28px 0 4px; letter-spacing: -0.01em; }
+p.sub { color: var(--muted); margin: 0 0 18px; }
+.muted { color: var(--muted); }
+.small { font-size: 0.86rem; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 10px 0; }
+.card h3 { margin: 0 0 6px; font-size: 1rem; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.spacer { flex: 1; }
+
+.pill { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.pill.good { color: var(--good); border-color: var(--good); }
+.pill.bad { color: var(--bad); border-color: var(--bad); }
+.pill.sched { color: var(--gold); border-color: var(--gold); }
+
+.flag { display: block; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 0.86rem; }
+
+button, .btn {
+  font: inherit; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  border-radius: 10px; padding: 11px 14px; min-height: 44px;
+}
+button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+button.approve { border-color: var(--good); color: var(--good); }
+button.reject { border-color: var(--bad); color: var(--bad); }
+button[disabled] { opacity: 0.45; cursor: default; }
+
+input, textarea, select {
+  font: inherit; width: 100%; padding: 11px 12px; min-height: 44px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink);
+}
+label { display: block; font-weight: 600; font-size: 0.9rem; margin: 12px 0 4px; }
+video { width: 100%; border-radius: 10px; background: #000; display: block; }
+.slides { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-top: 8px; }
+.slide { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--paper); }
+.slide b { display: block; font-size: 0.85rem; }
+.slide span { font-size: 0.82rem; color: var(--muted); }
+blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--gold); color: var(--muted); font-style: italic; }

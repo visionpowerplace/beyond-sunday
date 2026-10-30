@@ -110,3 +110,51 @@ alter table items add column if not exists post_error   text;
 alter table items add column if not exists posted_at    timestamptz;
 
 create index if not exists items_scheduled_idx on items (scheduled_for) where status = 'scheduled';
+
+-- Accounts. One church per account to start with; the column is here so a
+-- multi-church account is a change of query, not a migration.
+create table if not exists users (
+  id            uuid primary key default gen_random_uuid(),
+  email         text not null unique,
+  password_hash text not null,
+  name          text,
+  church_id     uuid references churches(id) on delete set null,
+  created_at    timestamptz not null default now(),
+  last_seen_at  timestamptz
+);
+
+create table if not exists sessions (
+  token       text primary key,
+  user_id     uuid not null references users(id) on delete cascade,
+  expires_at  timestamptz not null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists sessions_user_idx on sessions (user_id);
+
+create table if not exists password_resets (
+  token      text primary key,
+  user_id    uuid not null references users(id) on delete cascade,
+  expires_at timestamptz not null,
+  used_at    timestamptz
+);
+
+-- Billing, counted in sermons because that is the unit a church thinks in.
+alter table churches add column if not exists plan              text default 'trial';
+alter table churches add column if not exists trial_ends_at     timestamptz;
+alter table churches add column if not exists period_started_at timestamptz default now();
+alter table churches add column if not exists sermons_used      int default 0;
+alter table churches add column if not exists extra_credits     int default 0;
+alter table churches add column if not exists image_provider    text;
+
+-- Every movement of credit, so a disputed bill has an answer.
+create table if not exists credit_ledger (
+  id         bigserial primary key,
+  church_id  uuid not null references churches(id) on delete cascade,
+  delta      int not null,
+  reason     text not null,
+  sermon_id  uuid,
+  created_at timestamptz not null default now()
+);
+create index if not exists ledger_church_idx on credit_ledger (church_id, created_at desc);
+
+alter table sermons add column if not exists charged boolean default false;

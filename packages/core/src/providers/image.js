@@ -12,10 +12,12 @@ import { config } from '../config.js';
  * that cannot be made is worse than a slide without a photograph.
  */
 
-export async function generateImage(prompt, { width = 1080, height = 1350, seed } = {}) {
+export async function generateImage(prompt, { width = 1080, height = 1350, seed, provider } = {}) {
   if (!prompt?.trim()) return null;
+  // A church can pick its own; otherwise the deployment's default.
+  const chosen = provider || config.image.provider;
   try {
-    switch (config.image.provider) {
+    switch (chosen) {
       case 'pollinations': return await pollinations(prompt, { width, height, seed });
       case 'openrouter':   return await openrouterImage(prompt, { width, height });
       case 'local':        return await localFile();
@@ -23,7 +25,7 @@ export async function generateImage(prompt, { width = 1080, height = 1350, seed 
       default:             return null;
     }
   } catch (err) {
-    console.error(`[image] ${config.image.provider} failed: ${err.message}`);
+    console.error(`[image] ${chosen} failed: ${err.message}`);
     return null;
   }
 }

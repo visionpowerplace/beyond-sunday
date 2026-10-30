@@ -41,7 +41,7 @@ export async function runRenderCarousel(job) {
   for (const [i, slide] of slides.entries()) {
     // Photographs are made one at a time rather than in parallel: the free
     // generator rate-limits a burst and returns nothing for half the deck.
-    const photo = await backdropFor(slide, i, item.id);
+    const photo = await backdropFor(slide, i, item.id, church.image_provider);
     if (photo) withPhoto++;
 
     const out = path.join(dir, `${String(i + 1).padStart(2, '0')}.png`);
@@ -56,13 +56,13 @@ export async function runRenderCarousel(job) {
 }
 
 /** The photograph, resized to fill the frame. Null when there isn't one. */
-async function backdropFor(slide, index, itemId) {
+async function backdropFor(slide, index, itemId, provider) {
   const scene = slide.image_prompt || slide.scene;
   if (!scene) return null;
 
   // A stable seed so re-rendering the same slide does not reshuffle the deck.
   const seed = [...`${itemId}${index}`].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 1e6, 7);
-  const bytes = await generateImage(photoPrompt(scene), { width: W, height: H, seed });
+  const bytes = await generateImage(photoPrompt(scene), { width: W, height: H, seed, provider });
   if (!bytes) return null;
 
   try {

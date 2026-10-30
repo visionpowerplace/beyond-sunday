@@ -1,9 +1,9 @@
-import { getSermon, getItems, assetUrl, uploadUrl, KINDS, pendingGenerations, pendingClipCount } from '../../../lib/data.js';
-import { getChurch, connectedAccounts, postingConfigured } from '../../../lib/church.js';
-import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction, makeAspectAction, publishNowAction } from '../../actions.js';
+import { getSermon, getItems, assetUrl, uploadUrl, KINDS, pendingGenerations, pendingClipCount } from '../../../../lib/data.js';
+import { getChurch, connectedAccounts, postingConfigured } from '../../../../lib/church.js';
+import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction, makeAspectAction, publishNowAction } from '../../../actions.js';
 import { notFound } from 'next/navigation';
-import UploadBox from '../../upload-box.jsx';
-import AddButton from '../../add-button.jsx';
+import UploadBox from '../../../upload-box.jsx';
+import AddButton from '../../../add-button.jsx';
 
 export const dynamic = 'force-dynamic';
 

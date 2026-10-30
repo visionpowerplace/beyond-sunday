@@ -1,4 +1,6 @@
-import { listChurches, getChurch, logoUploadUrl, logoUrl, connectedAccounts, postingConfigured, CONNECTABLE, ASPECTS, NETWORKS } from '../../lib/church.js';
+import { getChurch, logoUploadUrl, logoUrl, connectedAccounts, postingConfigured, CONNECTABLE, ASPECTS, NETWORKS } from '../../lib/church.js';
+import { requireUser, currentChurch } from '../../lib/auth.js';
+import { changePasswordAction } from '../auth-actions.js';
 import { saveBrandAction, connectAccountAction, disconnectAccountAction } from '../actions.js';
 import UploadBox from '../upload-box.jsx';
 
@@ -6,15 +8,15 @@ export const dynamic = 'force-dynamic';
 
 export default async function Settings({ searchParams }) {
   const params = await searchParams;
-  const churches = await listChurches();
-  const church = await getChurch(params?.church);
+  const user = await requireUser();
+  const church = await currentChurch(user);
 
   if (!church) {
     return (
       <>
         <h1>Settings</h1>
         <p className="sub">Nothing to set up yet — make a sermon first and your church is created with it.</p>
-        <a className="btn" href="/">Back</a>
+        <a className="btn" href="/sundays">Back</a>
       </>
     );
   }
@@ -33,16 +35,6 @@ export default async function Settings({ searchParams }) {
         your church rather than like this tool.
       </p>
 
-      {churches.length > 1 && (
-        <div className="row" style={{ marginBottom: 14 }}>
-          {churches.map(c => (
-            <a key={c.id} href={`/settings?church=${c.id}`}
-               className="pill" style={{ textDecoration: 'none', padding: '8px 14px',
-               borderColor: c.id === church.id ? 'var(--ink)' : 'var(--line)',
-               color: c.id === church.id ? 'var(--ink)' : 'var(--muted)' }}>{c.name}</a>
-          ))}
-        </div>
-      )}
 
       <form action={saveBrandAction} className="card">
         <input type="hidden" name="churchId" value={church.id} />
@@ -72,6 +64,16 @@ export default async function Settings({ searchParams }) {
         <p className="small muted" style={{ margin: '4px 0 0' }}>
           The main colour is the background of a carousel slide; the accent is the headline rule, the
           scripture lower third on a clip, and the active dot.
+        </p>
+
+        <label htmlFor="imageProvider">Carousel photographs</label>
+        <select id="imageProvider" name="imageProvider" defaultValue={church.image_provider ?? ''}>
+          <option value="">Free (slower, quality varies)</option>
+          <option value="openrouter">Paid, better quality (about 20c a carousel)</option>
+          <option value="none">No photographs — use the drawn backgrounds</option>
+        </select>
+        <p className="small muted" style={{ margin: '4px 0 0' }}>
+          Change this, then press Redo on a carousel to compare the two on the same slides.
         </p>
 
         <label htmlFor="aspect">Default clip size</label>
@@ -162,7 +164,16 @@ export default async function Settings({ searchParams }) {
         </>
       )}
 
-      <p style={{ marginTop: 24 }}><a href="/">← Back to Sundays</a></p>
+      <h2>Your password</h2>
+      <form action={changePasswordAction} className="card">
+        <label htmlFor="current">Current password</label>
+        <input id="current" name="current" type="password" autoComplete="current-password" required />
+        <label htmlFor="newpass">New password</label>
+        <input id="newpass" name="password" type="password" autoComplete="new-password" required minLength={8} />
+        <div style={{ marginTop: 14 }}><button>Change it</button></div>
+      </form>
+
+      <p style={{ marginTop: 24 }}><a href="/sundays">← Back to Sundays</a></p>
     </>
   );
 }

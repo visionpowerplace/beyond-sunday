@@ -21,7 +21,10 @@
     "./pipeline/carousel.js": "./src/pipeline/carousel.js",
     "./providers/zernio.js": "./src/providers/zernio.js",
     "./pipeline/publish.js": "./src/pipeline/publish.js",
-    "./providers/image.js": "./src/providers/image.js"
+    "./providers/image.js": "./src/providers/image.js",
+    "./billing.js": "./src/billing.js",
+    "./password.js": "./src/password.js",
+    "./accounts.js": "./src/accounts.js"
   },
   "dependencies": {
     "postgres": "^3.4.5",

@@ -17,7 +17,7 @@ export async function getChurch(id) {
   return c ?? null;
 }
 
-export async function saveBrand(id, { name, primary, accent, aspect, handles }) {
+export async function saveBrand(id, { name, primary, accent, aspect, handles, imageProvider }) {
   const hex = v => (/^#[0-9a-f]{6}$/i.test(v) ? v : null);
   await sql`
     update churches set
@@ -25,7 +25,8 @@ export async function saveBrand(id, { name, primary, accent, aspect, handles }) 
       brand_primary  = coalesce(${hex(primary)}, brand_primary),
       brand_accent   = coalesce(${hex(accent)}, brand_accent),
       default_aspect = coalesce(${ASPECTS[aspect] ? aspect : null}, default_aspect),
-      handles        = ${sql.json(handles ?? {})}
+      handles        = ${sql.json(handles ?? {})},
+      image_provider = ${['openrouter', 'none', 'pollinations'].includes(imageProvider) ? imageProvider : null}
     where id = ${id}`;
 }
 

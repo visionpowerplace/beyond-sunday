@@ -47,6 +47,16 @@ tests/e2e.mjs        transcribe -> generate -> render against a real database
 
 ---
 
+## Accounts, plans and credits
+
+A church signs up, gets a **free trial** (2 sermons, 14 days, no card), and is then on a plan: Free (1 sermon a month), Church ($29, 8) or Ministry ($69, 20). Extra sermons are bought in packs and do not expire.
+
+Billing is counted in **sermons**, not minutes or credits. Every competitor meters minutes, and every review of them complains that a church cannot tell what a 90-minute service with a 35-minute sermon will cost. One sermon covers the transcript, the clips, and every deliverable asked for afterwards; redoing a set costs nothing extra. A sermon is charged when a recording starts processing.
+
+**Checkout is not connected.** Choosing a plan or adding credits applies immediately and charges nothing, and says so on the page. The billing sits behind one interface, so Stripe — or Paystack for naira pricing — changes how those buttons settle and nothing else.
+
+Passwords are scrypt-hashed, sessions are httpOnly cookies, and a password reset signs the account out everywhere. Reset email goes through Resend when `RESEND_API_KEY` is set; without it the link is logged rather than silently dropped.
+
 ## Run it locally
 
 ```bash

@@ -3,6 +3,10 @@ import { createAccount, createResetToken, useResetToken } from '../packages/core
 import { verifyPassword } from '../packages/core/src/password.js';
 import { balance } from '../packages/core/src/billing.js';
 
+// The test owns these rows; a previous run must not make this one fail.
+await sql`delete from users where email in ('pastor@example.org', 'short@example.org')`;
+await sql`delete from churches where name in ('Grace Chapel', 'X')`;
+
 const checks = [];
 const c = (n, p, d='') => checks.push([n, p, d]);
 
@@ -38,5 +42,7 @@ catch (e) { c('a used token is dead', /expired or has already been used/i.test(e
 for (const [n,p,d] of checks) console.log(`  ${p ? 'ok  ' : 'FAIL'} ${n}${d ? '  — '+d : ''}`);
 const failed = checks.filter(([,p]) => !p).length;
 console.log(failed ? `\n${failed} FAILED` : '\nPASS');
+await sql`delete from users where email in ('pastor@example.org', 'short@example.org')`;
+await sql`delete from churches where name in ('Grace Chapel', 'X')`;
 await closeDb();
 process.exit(failed ? 1 : 0);

@@ -65,3 +65,16 @@ video { width: 100%; border-radius: 10px; background: #000; display: block; }
 .slide b { display: block; font-size: 0.85rem; }
 .slide span { font-size: 0.82rem; color: var(--muted); }
 blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--gold); color: var(--muted); font-style: italic; }
+
+/* Shown whenever something is being made, so a click never looks ignored. */
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.5s; } }

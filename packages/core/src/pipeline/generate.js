@@ -49,7 +49,7 @@ export async function runGenerate(job) {
     const clips = await sql`select id from items where sermon_id = ${sermon.id} and kind = 'clip' order by ordinal`;
     for (const c of clips) await enqueue({ type: 'render_clip', sermonId: sermon.id, itemId: c.id });
   }
-  await settleStatus(sermon.id);
+  await settleStatus(sermon.id, job.id);
   return made;
 }
 
@@ -95,12 +95,24 @@ async function replaceItems(sermonId, kind, rows) {
   });
 }
 
-/** Ready once nothing is still rendering. */
-async function settleStatus(sermonId) {
-  const [{ pending }] = await sql`
-    select count(*)::int as pending from items
+/**
+ * Ready only when nothing else is still working on this sermon.
+ *
+ * With several jobs running at once, the first to finish used to mark the
+ * sermon ready while its siblings were still going. The page stopped
+ * refreshing, the remaining sections arrived silently, and it looked broken.
+ */
+async function settleStatus(sermonId, currentJobId) {
+  const [{ generating }] = await sql`
+    select count(*)::int as generating from jobs
+    where sermon_id = ${sermonId} and type = 'generate'
+      and status in ('queued', 'running') and id <> ${currentJobId ?? 0}`;
+  const [{ rendering }] = await sql`
+    select count(*)::int as rendering from items
     where sermon_id = ${sermonId} and kind = 'clip' and asset_path is null`;
-  await sql`update sermons set status = ${pending ? 'rendering' : 'ready'}, updated_at = now() where id = ${sermonId}`;
+
+  const status = generating ? 'generating' : rendering ? 'rendering' : 'ready';
+  await sql`update sermons set status = ${status}, updated_at = now() where id = ${sermonId}`;
 }
 
 function toItems(kind, data, sermon, transcript) {

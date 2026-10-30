@@ -68,8 +68,31 @@ export async function setWindow(sermonId, startS, endS) {
  * single call.
  */
 export async function generateKinds(sermonId, kinds) {
+  // Pressing a button twice should not buy the same thing twice. Anything
+  // already queued or running for this sermon is dropped from the request.
+  const pending = await pendingGenerations(sermonId);
+  const wanted = kinds.filter(k => !pending.includes(k));
+  if (!wanted.length) return [];
+
   await sql`update sermons set status = 'generating', error = null, updated_at = now() where id = ${sermonId}`;
-  await enqueue({ type: 'generate', sermonId, payload: { kinds } });
+  await enqueue({ type: 'generate', sermonId, payload: { kinds: wanted } });
+  return wanted;
+}
+
+/** Kinds this sermon has a generate job queued or running for, right now. */
+export async function pendingGenerations(sermonId) {
+  const rows = await sql`
+    select payload from jobs
+    where sermon_id = ${sermonId} and type = 'generate' and status in ('queued', 'running')`;
+  return [...new Set(rows.flatMap(r => r.payload?.kinds ?? []))];
+}
+
+/** How many clips are still waiting on the renderer. */
+export async function pendingClipCount(sermonId) {
+  const [row] = await sql`
+    select count(*)::int as n from jobs
+    where sermon_id = ${sermonId} and type = 'render_clip' and status in ('queued', 'running')`;
+  return row?.n ?? 0;
 }
 
 /** Which deliverables this sermon already has, so the page knows what to offer. */

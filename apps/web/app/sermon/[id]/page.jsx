@@ -1,7 +1,8 @@
-import { getSermon, getItems, assetUrl, uploadUrl, KINDS } from '../../../lib/data.js';
+import { getSermon, getItems, assetUrl, uploadUrl, KINDS, pendingGenerations, pendingClipCount } from '../../../lib/data.js';
 import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction } from '../../actions.js';
 import { notFound } from 'next/navigation';
 import UploadBox from '../../upload-box.jsx';
+import AddButton from '../../add-button.jsx';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,12 +14,16 @@ export default async function SermonPage({ params }) {
 
   const working = ['queued', 'ingesting', 'transcribing', 'generating', 'rendering'].includes(sermon.status);
   const upload = uploadUrl(sermon);
+  const pending = await pendingGenerations(id);
+  const clipsLeft = await pendingClipCount(id);
   const present = [...new Set(items.map(i => i.kind))];
-  const missing = KINDS.filter(k => !present.includes(k.key));
+  const missing = KINDS.filter(k => !present.includes(k.key) && !pending.includes(k.key));
+  // Keep the page refreshing while anything at all is still being made.
+  const busy = working || pending.length > 0 || clipsLeft > 0;
 
   return (
     <>
-      {working && <meta httpEquiv="refresh" content="10" />}
+      {busy && <meta httpEquiv="refresh" content="5" />}
       <h1>{sermon.title}</h1>
       <p className="sub">
         {sermon.church_name}{sermon.preacher ? ` · ${sermon.preacher}` : ''}
@@ -80,20 +85,28 @@ export default async function SermonPage({ params }) {
         </div>
       )}
 
-      {KINDS.filter(k => present.includes(k.key)).map(kind => {
+      {KINDS.filter(k => present.includes(k.key) || pending.includes(k.key)).map(kind => {
         const group = items.filter(i => i.kind === kind.key);
+        const making = pending.includes(kind.key);
         return (
           <section key={kind.key}>
             <div className="row">
               <h2 style={{ marginBottom: 0 }}>{kind.label}</h2>
               <span className="spacer" />
-              <form action={generateKindAction}>
-                <input type="hidden" name="sermonId" value={sermon.id} />
-                <input type="hidden" name="kind" value={kind.key} />
-                <button className="small" style={{ minHeight: 32, padding: '4px 10px' }}>Redo</button>
-              </form>
+              {making
+                ? <span className="pill sched">making these now…</span>
+                : (
+                  <form action={generateKindAction}>
+                    <input type="hidden" name="sermonId" value={sermon.id} />
+                    <input type="hidden" name="kind" value={kind.key} />
+                    <button className="small" style={{ minHeight: 32, padding: '4px 10px' }}>Redo</button>
+                  </form>
+                )}
             </div>
             <p className="small muted" style={{ margin: 0 }}>{kind.blurb}</p>
+            {making && !group.length && (
+              <div className="card"><Working label={kind.label} /></div>
+            )}
             {group.map(item => <ItemCard key={item.id} item={item} sermonId={sermon.id} />)}
           </section>
         );
@@ -111,7 +124,7 @@ export default async function SermonPage({ params }) {
                 <form action={generateKindAction} key={kind.key}>
                   <input type="hidden" name="sermonId" value={sermon.id} />
                   <input type="hidden" name="kind" value={kind.key} />
-                  <button>{kind.label}</button>
+                  <AddButton label={kind.label} />
                 </form>
               ))}
             </div>
@@ -119,6 +132,15 @@ export default async function SermonPage({ params }) {
         </section>
       )}
     </>
+  );
+}
+
+function Working({ label }) {
+  return (
+    <div className="row" style={{ gap: 10 }}>
+      <span className="spinner" aria-hidden="true" />
+      <span>Making your {label.toLowerCase()}… about a minute.</span>
+    </div>
   );
 }
 

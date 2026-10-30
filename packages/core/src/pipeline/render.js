@@ -47,7 +47,7 @@ export async function runRenderClip(job) {
 
   const rel = path.relative(config.storageDir, outPath);
   await sql`update items set asset_path = ${rel}, updated_at = now() where id = ${item.id}`;
-  await markSermonReadyIfDone(sermon.id);
+  await markSermonReadyIfDone(sermon.id, job.id);
   return { outPath, duration: end - start };
 }
 
@@ -81,13 +81,17 @@ export async function renderClipFile({ sourcePath, start, end, words = [], scrip
   return { outPath, duration };
 }
 
-async function markSermonReadyIfDone(sermonId) {
+async function markSermonReadyIfDone(sermonId, currentJobId) {
   const [{ pending }] = await sql`
     select count(*)::int as pending from items
     where sermon_id = ${sermonId} and kind = 'clip' and asset_path is null`;
-  if (pending === 0) {
-    await sql`update sermons set status = 'ready', updated_at = now() where id = ${sermonId}`;
-  }
+  if (pending > 0) return;
+
+  // Something else may still be generating; do not call the whole sermon ready.
+  const [{ busy }] = await sql`
+    select count(*)::int as busy from jobs
+    where sermon_id = ${sermonId} and status in ('queued', 'running') and id <> ${currentJobId ?? 0}`;
+  await sql`update sermons set status = ${busy ? 'generating' : 'ready'}, updated_at = now() where id = ${sermonId}`;
 }
 
 function scriptureCues(item, start, end) {

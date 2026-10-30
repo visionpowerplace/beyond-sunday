@@ -2,6 +2,8 @@ import { sql } from '@bs/core/db.js';
 import { enqueue } from '@bs/core/queue.js';
 import { config } from '@bs/core/config.js';
 import { randomUUID } from 'node:crypto';
+import { parseCaptions } from '@bs/core/captions.js';
+import { findScripture } from '@bs/core/scripture.js';
 
 export const KINDS = [
   { key: 'clip',       label: 'Clips',               blurb: 'Vertical, captioned, ready to post' },
@@ -52,6 +54,34 @@ export async function createSermon({ churchName, title, preacher, sourceUrl, sta
 
   // An upload enqueues itself once the file actually lands on the volume.
   if (!upload) await enqueue({ type: 'ingest', sermonId: sermon.id });
+  return sermon;
+}
+
+/**
+ * A sermon built from a caption file: no download, no transcription, straight
+ * to writing. Clips need the video, so they are offered only once one arrives.
+ */
+export async function createSermonFromCaptions({ churchName, title, preacher, captions, sourceUrl }) {
+  const parsed = parseCaptions(captions);
+  const church = await getOrCreateChurch(churchName || 'My church');
+  const transcript = {
+    ...parsed,
+    scripture: findScripture(parsed.text, parsed.words),
+    provider: 'captions',
+  };
+
+  const [sermon] = await sql`
+    insert into sermons (church_id, title, preacher, source_url, transcript, duration_s, status)
+    values (${church.id}, ${title}, ${preacher || null}, ${sourceUrl || null},
+            ${sql.json(transcript)}, ${parsed.duration ?? null}, 'generating')
+    returning *`;
+
+  // Without a video there are no clips to make, so start with the points.
+  await enqueue({
+    type: 'generate',
+    sermonId: sermon.id,
+    payload: { kinds: parsed.timed ? ['clip', 'highlight'] : ['highlight'] },
+  });
   return sermon;
 }
 

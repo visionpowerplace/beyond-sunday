@@ -23,7 +23,15 @@ Clips are generated automatically after transcription, because that is what a ch
 
 Every item is its own card in the review queue: approve, reject with a reason, or schedule it on its own day. The clips are the commodity; the pack and the approval step are the product.
 
-**Where a recording can come from:** upload, or a link to Google Drive, Dropbox, OneDrive/SharePoint, Vimeo or a direct file. Share-page links are turned into the file behind them and checked for reachability before anything is queued. YouTube is the exception: it serves shared server addresses its "confirm you're not a bot" check, nothing here tries to get around that, and a YouTube link is refused at the form with the reason.
+**Three ways in:**
+
+1. **Upload** the recording — everything works, including clips.
+2. **A link** to Google Drive, Dropbox, OneDrive/SharePoint, Vimeo or a direct file.
+3. **Paste the captions** — an .srt, .vtt or plain transcript. No video, no download, and no transcription call at all: the points, carousels, write-ups, summary and devotional are made in under a minute. With timings you also get clip selections, which render the moment a video is added.
+
+Route 3 is the honest answer to YouTube. There is no download method on any YouTube API, for anyone, including the channel that owns the video, and nothing here tries to get around the bot check that enforces it. But a channel owner can download their own caption track from YouTube Studio in two clicks, and that is most of the product. Pasting a YouTube link on any route also fills in the title and preacher from the public oEmbed endpoint.
+
+**Where a link can point:** Google Drive, Dropbox, OneDrive/SharePoint, Vimeo or a direct file. Share-page links are turned into the file behind them and checked for reachability before anything is queued. YouTube links are refused on the link route, with the reason and a pointer to the captions route.
 
 **Storage:** the source recording is one to three gigabytes; its clips are a few megabytes and its transcript is a column in the database. So a source is deleted once its clips are rendered and it has aged past `SOURCE_RETENTION_HOURS` (default 72), and an upload that would not fit clears older sources out of the way first. If it still would not fit, the upload is refused with the numbers rather than dying halfway through with ENOSPC. `/health` reports free space.
 

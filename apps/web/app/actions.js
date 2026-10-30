@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest, deleteSermon, deleteFailedSermons, renderAspect, publishNow } from '../lib/data.js';
+import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest, deleteSermon, deleteFailedSermons, renderAspect, publishNow, createSermonFromCaptions } from '../lib/data.js';
 import { normalizeSourceUrl, checkSourceUrl } from '@bs/core/source-url.js';
 import { saveBrand, NETWORKS, getChurch, startConnect, disconnectAccount } from '../lib/church.js';
 import { requireUser, currentChurch } from '../lib/auth.js';
@@ -41,6 +41,24 @@ export async function newSermonAction(formData) {
   const church = await currentChurch(user);
   const allowed = canStartSermon(church);
   if (!allowed.ok) redirect(`/sundays?problem=${encodeURIComponent(allowed.reason)}`);
+
+  // A caption file means no download and no transcription at all.
+  if (mode === 'captions') {
+    const captions = String(formData.get('captions') || '').trim();
+    if (!captions) redirect('/sundays?problem=Paste+the+captions+first.');
+    let made;
+    try {
+      made = await createSermonFromCaptions({
+        churchName: String(formData.get('churchName') || '').trim(),
+        title, preacher: String(formData.get('preacher') || '').trim(),
+        captions, sourceUrl: rawUrl || null,
+      });
+    } catch (err) {
+      redirect(`/sundays?problem=${encodeURIComponent(err.message)}`);
+    }
+    await spendSermon(church, made.id);
+    redirect(`/sundays/sermon/${made.id}`);
+  }
 
   const sermon = await createSermon({
     churchName: String(formData.get('churchName') || '').trim(),

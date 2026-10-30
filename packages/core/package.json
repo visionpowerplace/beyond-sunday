@@ -24,7 +24,9 @@
     "./providers/image.js": "./src/providers/image.js",
     "./billing.js": "./src/billing.js",
     "./password.js": "./src/password.js",
-    "./accounts.js": "./src/accounts.js"
+    "./accounts.js": "./src/accounts.js",
+    "./youtube-meta.js": "./src/youtube-meta.js",
+    "./captions.js": "./src/captions.js"
   },
   "dependencies": {
     "postgres": "^3.4.5",

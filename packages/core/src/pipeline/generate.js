@@ -45,7 +45,9 @@ export async function runGenerate(job) {
     made[kind] = rows.length;
   }
 
-  if (made.clip) {
+  // A sermon that came from a caption file has no video yet; its clip
+  // selections are kept, and they render as soon as one is uploaded.
+  if (made.clip && sermon.source_path) {
     const clips = await sql`select id from items where sermon_id = ${sermon.id} and kind = 'clip' order by ordinal`;
     for (const c of clips) await enqueue({ type: 'render_clip', sermonId: sermon.id, itemId: c.id });
   }
@@ -112,8 +114,10 @@ async function settleStatus(sermonId, currentJobId) {
     where sermon_id = ${sermonId} and type = 'generate'
       and status in ('queued', 'running') and id <> ${currentJobId ?? 0}`;
   const [{ rendering }] = await sql`
-    select count(*)::int as rendering from items
-    where sermon_id = ${sermonId} and kind = 'clip' and asset_path is null`;
+    select count(*)::int as rendering from items i
+    join sermons s on s.id = i.sermon_id
+    where i.sermon_id = ${sermonId} and i.kind = 'clip'
+      and i.asset_path is null and s.source_path is not null`;
 
   const status = generating ? 'generating' : rendering ? 'rendering' : 'ready';
   await sql`update sermons set status = ${status}, updated_at = now() where id = ${sermonId}`;

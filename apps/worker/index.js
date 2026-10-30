@@ -203,7 +203,23 @@ async function handleUpload(req, res, url) {
   }
 
   await sql`update sermons set source_path = ${dest}, upload_token = null, status = 'ingesting', error = null, updated_at = now() where id = ${sermonId}`;
-  await enqueue({ type: 'ingest', sermonId });
+
+  // A sermon that already has a transcript came from a caption file: it needs
+  // the audio extracted for nothing, so skip straight to rendering the clips
+  // that have been waiting for a video.
+  const [existing] = await sql`select transcript from sermons where id = ${sermonId}`;
+  if (existing?.transcript) {
+    const waiting = await sql`
+      select id from items where sermon_id = ${sermonId} and kind = 'clip' and asset_path is null`;
+    if (waiting.length) {
+      await sql`update sermons set status = 'rendering' where id = ${sermonId}`;
+      for (const c of waiting) await enqueue({ type: 'render_clip', sermonId, itemId: c.id });
+    } else {
+      await enqueue({ type: 'generate', sermonId, payload: { kinds: ['clip'] } });
+    }
+  } else {
+    await enqueue({ type: 'ingest', sermonId });
+  }
 
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ ok: true }));

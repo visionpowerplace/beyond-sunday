@@ -18,7 +18,7 @@ import { generateImage, photoPrompt } from '../providers/image.js';
 
 const W = 1080, H = 1350;              // 4:5, the shape that fills the most feed
 const PAD = 88;
-const HEAD = 'Lora, DejaVu Serif, Georgia, serif';
+const HEAD = 'TeX Gyre Schola, Lora, DejaVu Serif, Georgia, serif';
 const BODY = 'DejaVu Sans, sans-serif';
 
 export async function runRenderCarousel(job) {

@@ -2,20 +2,16 @@
 # rather than a serverless function.
 FROM node:22-bookworm-slim
 
-# deno is here for yt-dlp, not for us: YouTube's player needs a JavaScript
-# runtime to solve its signature challenge, and yt-dlp has deprecated
-# extraction without one. Without deno the download fails or loses formats.
+# Every font comes from apt. An earlier version downloaded one from GitHub and
+# a 404 took the whole build down — a headline face is not worth a broken
+# deploy. deno is here for yt-dlp, which now needs a JavaScript runtime to
+# solve YouTube's player challenge.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ffmpeg python3 fonts-dejavu fonts-dejavu-core fonts-liberation2 \
-      ca-certificates curl unzip fontconfig \
+      ffmpeg python3 ca-certificates curl unzip fontconfig \
+      fonts-dejavu fonts-dejavu-core fonts-liberation2 fonts-texgyre \
  && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- --yes \
- && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+ && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
  && chmod a+rx /usr/local/bin/yt-dlp \
- && mkdir -p /usr/share/fonts/truetype/lora \
- && curl -fsSL -o /usr/share/fonts/truetype/lora/Lora-Bold.ttf \
-      https://github.com/google/fonts/raw/main/ofl/lora/static/Lora-Bold.ttf \
- && curl -fsSL -o /usr/share/fonts/truetype/lora/Lora-Regular.ttf \
-      https://github.com/google/fonts/raw/main/ofl/lora/static/Lora-Regular.ttf \
  && fc-cache -f \
  && rm -rf /var/lib/apt/lists/*
 

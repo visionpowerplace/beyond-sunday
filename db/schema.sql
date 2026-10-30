@@ -158,3 +158,9 @@ create table if not exists credit_ledger (
 create index if not exists ledger_church_idx on credit_ledger (church_id, created_at desc);
 
 alter table sermons add column if not exists charged boolean default false;
+
+-- The church's own YouTube authorisation, used to read captions from videos
+-- it owns. Nothing here can read a video file: YouTube has no such endpoint.
+alter table churches add column if not exists google_refresh_token text;
+alter table churches add column if not exists google_email        text;
+alter table churches add column if not exists google_connected_at timestamptz;

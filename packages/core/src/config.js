@@ -38,6 +38,14 @@ export const config = {
     groqModel: env.GROQ_WHISPER_MODEL || 'whisper-large-v3-turbo',
   },
 
+  // The church's own Google account, used only to read captions from videos
+  // it owns. youtube.force-ssl is a sensitive scope: unverified, Google caps
+  // it at 100 users, which is plenty for a pilot.
+  google: {
+    clientId: env.GOOGLE_CLIENT_ID || '',
+    clientSecret: env.GOOGLE_CLIENT_SECRET || '',
+  },
+
   // Photographs for carousel slides. 'pollinations' needs no account and no
   // card; 'openrouter' is better and costs per image; 'none' keeps the drawn
   // backgrounds.

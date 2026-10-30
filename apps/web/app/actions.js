@@ -148,6 +148,22 @@ export async function addCreditsAction(formData) {
   redirect(`/billing?done=${encodeURIComponent(`${pack.sermons} sermons added.`)}`);
 }
 
+export async function connectYouTubeAction() {
+  const user = await requireUser();
+  const church = await currentChurch(user);
+  const { startUrl, googleConfigured } = await import('../lib/google.js');
+  if (!googleConfigured()) redirect('/settings?problem=YouTube+is+not+configured+for+this+deployment.');
+  redirect(startUrl(church.id));
+}
+
+export async function disconnectYouTubeAction() {
+  const user = await requireUser();
+  const church = await currentChurch(user);
+  const { disconnectGoogle } = await import('../lib/google.js');
+  await disconnectGoogle(church.id);
+  revalidatePath('/settings');
+}
+
 export async function connectAccountAction(formData) {
   const church = await getChurch(String(formData.get('churchId')));
   const platform = String(formData.get('platform'));

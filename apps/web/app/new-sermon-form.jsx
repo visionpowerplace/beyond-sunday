@@ -11,10 +11,14 @@ import { useState, useRef } from 'react';
  * the channel, which is most of the typing, plus a direct link into YouTube
  * Studio where the owner can download their own original.
  */
-export default function NewSermonForm({ sources, children }) {
+export default function NewSermonForm({ sources, youtubeConnected, children }) {
   const [mode, setMode] = useState('upload');
   const [yt, setYt] = useState(null);
   const [looking, setLooking] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [pulled, setPulled] = useState(null);
+  const [pullError, setPullError] = useState(null);
+  const captionsRef = useRef(null);
   const titleRef = useRef(null);
   const preacherRef = useRef(null);
 
@@ -34,6 +38,26 @@ export default function NewSermonForm({ sources, children }) {
       if (meta.channel && preacherRef.current && !preacherRef.current.value) preacherRef.current.value = meta.channel;
     } catch { /* the form still works without it */ }
     finally { setLooking(false); }
+  }
+
+  /** Ask YouTube for the caption track on a video this church owns. */
+  async function pullCaptions(url) {
+    setPulling(true);
+    setPullError(null);
+    setPulled(null);
+    try {
+      const res = await fetch(`/api/captions?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if (!data.ok) { setPullError(data); return; }
+      setMode('captions');
+      setPulled(data.track ?? {});
+      // The textarea is the form field, so the pulled track goes straight in.
+      requestAnimationFrame(() => { if (captionsRef.current) captionsRef.current.value = data.srt; });
+    } catch {
+      setPullError({ reason: 'Could not reach YouTube just then. Try again.' });
+    } finally {
+      setPulling(false);
+    }
   }
 
   return (
@@ -76,10 +100,38 @@ export default function NewSermonForm({ sources, children }) {
 
       {looking && <p className="small muted" style={{ margin: '6px 0 0' }}><span className="spinner" /> Reading that link…</p>}
 
+      {yt?.id && (
+        <div style={{ marginTop: 10 }}>
+          <button type="button" className="primary" disabled={pulling}
+                  onClick={() => pullCaptions(document.getElementById('sourceUrl').value)}>
+            {pulling ? <><span className="spinner" /> Asking YouTube…</> : 'Pull the captions from this video'}
+          </button>
+          <p className="small muted" style={{ margin: '6px 0 0' }}>
+            {youtubeConnected
+              ? 'Works on videos on your connected channel. No upload, and nothing to transcribe.'
+              : 'Needs your YouTube account connected once, in Settings.'}
+          </p>
+        </div>
+      )}
+
+      {pulled && (
+        <p className="small" style={{ color: 'var(--good)', margin: '8px 0 0' }}>
+          Captions pulled{pulled.language ? ` (${pulled.language})` : ''}
+          {pulled.asr ? ' — auto-generated, so check the names and verse references' : ''}. Ready below.
+        </p>
+      )}
+
+      {pullError && (
+        <div className="flag">
+          {pullError.reason}
+          {pullError.needsConnect && <> <a href="/settings">Connect YouTube in Settings</a>.</>}
+        </div>
+      )}
+
       {mode === 'captions' && (
         <>
           <label htmlFor="captions">Captions or transcript</label>
-          <textarea id="captions" name="captions" rows={8}
+          <textarea id="captions" name="captions" rows={8} ref={captionsRef}
                     placeholder={'WEBVTT\n\n00:00:01.000 --> 00:00:03.500\nprayer is not just for needs\n\n…or an .srt, or just the plain text.'} />
           <p className="small muted" style={{ margin: '6px 0 0' }}>
             {yt?.studioUrl ? (

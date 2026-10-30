@@ -1,7 +1,8 @@
 import { getChurch, logoUploadUrl, logoUrl, connectedAccounts, postingConfigured, CONNECTABLE, ASPECTS, NETWORKS } from '../../lib/church.js';
 import { requireUser, currentChurch } from '../../lib/auth.js';
+import { googleConfigured } from '../../lib/google.js';
 import { changePasswordAction } from '../auth-actions.js';
-import { saveBrandAction, connectAccountAction, disconnectAccountAction } from '../actions.js';
+import { saveBrandAction, connectAccountAction, disconnectAccountAction, connectYouTubeAction, disconnectYouTubeAction } from '../actions.js';
 import UploadBox from '../upload-box.jsx';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,7 @@ export default async function Settings({ searchParams }) {
   const handles = church.handles ?? {};
   const posting = postingConfigured();
   const accounts = await connectedAccounts(church);
+  const googleReady = googleConfigured();
 
   return (
     <>
@@ -110,6 +112,45 @@ export default async function Settings({ searchParams }) {
                style={{ borderRadius: 10, background: 'var(--paper)', objectFit: 'contain', marginBottom: 10 }} />
         )}
         <UploadBox url={upload} accept="image/*" label="Choose a logo" />
+      </div>
+
+      <h2>Your YouTube channel</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        Connect it once and a sermon can start from a YouTube link: we read the caption track off your
+        own video, so there is nothing to upload and nothing to transcribe.
+      </p>
+      <div className="card">
+        {!googleReady ? (
+          <p className="small muted" style={{ margin: 0 }}>
+            Not switched on for this deployment yet. It needs a Google OAuth client
+            (<code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code>) on the web service.
+          </p>
+        ) : church.google_refresh_token ? (
+          <>
+            <div className="row">
+              <span className="pill good">Connected</span>
+              {church.google_email && <b className="small">{church.google_email}</b>}
+              <span className="spacer" />
+              <form action={disconnectYouTubeAction}>
+                <button className="small reject" style={{ minHeight: 30, padding: '3px 9px' }}>Disconnect</button>
+              </form>
+            </div>
+            <p className="small muted" style={{ margin: '8px 0 0' }}>
+              This reads captions from videos on this channel. It cannot download a video — YouTube has
+              no such endpoint for anyone, including you.
+            </p>
+          </>
+        ) : (
+          <>
+            <form action={connectYouTubeAction}>
+              <button className="primary">Connect YouTube</button>
+            </form>
+            <p className="small muted" style={{ margin: '8px 0 0' }}>
+              Sign in with the Google account that owns the channel. We ask only for caption access, and
+              it works on your own videos.
+            </p>
+          </>
+        )}
       </div>
 
       <h2>Connected accounts</h2>

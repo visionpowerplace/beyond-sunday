@@ -26,7 +26,8 @@
     "./password.js": "./src/password.js",
     "./accounts.js": "./src/accounts.js",
     "./youtube-meta.js": "./src/youtube-meta.js",
-    "./captions.js": "./src/captions.js"
+    "./captions.js": "./src/captions.js",
+    "./providers/youtube.js": "./src/providers/youtube.js"
   },
   "dependencies": {
     "postgres": "^3.4.5",

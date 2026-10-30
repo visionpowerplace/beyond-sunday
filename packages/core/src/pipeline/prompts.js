@@ -57,16 +57,31 @@ const HIGHLIGHT_TASK = `Find the things this sermon actually argued. Not topics 
 
 const CAROUSEL_TASK = `Turn each point below into a slide carousel.
 
+Each slide carries a "motif": the background image drawn behind its words. Choose the one that matches what the slide actually says, not one at random, and vary them across a carousel. The choices are:
+
+- light     breakthrough, revelation, seeing clearly, glory
+- path      direction, a journey, following, obedience, the long road
+- water     cleansing, refreshing, the Spirit, depth, stillness
+- mountain  difficulty, perseverance, a high calling, endurance
+- seed      growth, small beginnings, patience, sowing and reaping
+- fire      passion, zeal, refining, the Spirit's power
+- anchor    hope, steadiness, holding on, faithfulness in trouble
+- door      opportunity, invitation, access, a new season
+- crown     authority, victory, reward, the kingship of Christ
+- shield    protection, faith as defence, spiritual warfare
+- bread     provision, communion, daily need, feeding on the word
+- dawn      a new beginning, mercy each morning, hope after a hard night
+
 {
   "carousels": [
     { "highlight_index": 0,
       "title": "slide-one headline, under 8 words",
-      "slides": [ { "heading": "under 6 words", "body": "under 25 words" } ],
+      "slides": [ { "heading": "under 6 words", "body": "under 25 words", "motif": "seed" } ],
       "caption": "2-3 sentences" }
   ]
 }
 
-One carousel per point, 4 to 6 slides each.`;
+One carousel per point, 4 to 6 slides each. The heading must be under 6 words and the body under 25: these are drawn onto an image and longer text is cut off.`;
 
 const WRITEUP_TASK = `Write a short post developing each point below.
 

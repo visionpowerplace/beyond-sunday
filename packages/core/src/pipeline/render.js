@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
+import { ASPECTS } from '../brand.js';
 import { sql } from '../db.js';
 import { run } from './ingest.js';
 
@@ -15,11 +16,15 @@ import { run } from './ingest.js';
  * function and no amount of tuning changes that.
  */
 
-const W = config.clipWidth, H = Math.round((config.clipWidth * 16) / 9);
+// 9:16 at the configured width is the default shape; every other size is
+// derived from the same source clip so the church can post one message to
+// four networks without re-cutting anything.
+const SCALE = config.clipWidth / 1080;
 const PAD = 0.3;            // air at each end so the clip does not clip a word
 const WORDS_PER_CUE = 3;
 
 export async function runRenderClip(job) {
+  const aspect = ASPECTS[job.payload?.aspect] ? job.payload.aspect : '9:16';
   const [item] = await sql`select * from items where id = ${job.item_id}`;
   if (!item) throw new Error(`item ${job.item_id} not found`);
   const [sermon] = await sql`select * from sermons where id = ${item.sermon_id}`;
@@ -31,7 +36,8 @@ export async function runRenderClip(job) {
 
   const dir = path.join(config.storageDir, sermon.id, 'clips');
   await fs.promises.mkdir(dir, { recursive: true });
-  const outPath = path.join(dir, `${item.id}.mp4`);
+  const suffix = aspect === '9:16' ? '' : `-${aspect.replace(':', 'x')}`;
+  const outPath = path.join(dir, `${item.id}${suffix}.mp4`);
 
   const start = Math.max(0, Number(item.start_s) - PAD);
   const end = Number(item.end_s) + PAD;
@@ -43,26 +49,35 @@ export async function runRenderClip(job) {
     words: sermon.transcript?.words ?? [],
     scripture: scriptureCues(item, start, end),
     outPath,
+    aspect,
   });
 
   const rel = path.relative(config.storageDir, outPath);
-  await sql`update items set asset_path = ${rel}, updated_at = now() where id = ${item.id}`;
+  if (aspect === '9:16') {
+    await sql`update items set asset_path = ${rel}, updated_at = now() where id = ${item.id}`;
+  } else {
+    await sql`update items set variants = variants || ${sql.json({ [aspect]: rel })}, updated_at = now() where id = ${item.id}`;
+  }
   await markSermonReadyIfDone(sermon.id, job.id);
-  return { outPath, duration: end - start };
+  return { aspect, duration: end - start };
 }
 
 /**
  * The ffmpeg half, with no database in it, so it can be tested on its own.
  * Everything that can go wrong with rendering goes wrong in here.
  */
-export async function renderClipFile({ sourcePath, start, end, words = [], scripture = [], outPath }) {
+export async function renderClipFile({ sourcePath, start, end, words = [], scripture = [], outPath, aspect = '9:16' }) {
   const duration = end - start;
   if (!(duration > 1)) throw new Error(`nonsense clip duration: ${duration}s`);
+
+  const spec = ASPECTS[aspect] ?? ASPECTS['9:16'];
+  const W = Math.round(spec.w * SCALE / 2) * 2;      // even numbers, or x264 refuses
+  const H = Math.round(spec.h * SCALE / 2) * 2;
 
   const inWindow = words.filter(w => w.end > start && w.start < end);
   const assPath = outPath.replace(/\.mp4$/, '.ass');
   await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
-  await fs.promises.writeFile(assPath, buildAss(inWindow, start, scripture), 'utf8');
+  await fs.promises.writeFile(assPath, buildAss(inWindow, start, scripture, { W, H }), 'utf8');
 
   await run('ffmpeg', [
     '-y',
@@ -70,7 +85,7 @@ export async function renderClipFile({ sourcePath, start, end, words = [], scrip
     '-ss', start.toFixed(3),
     '-t', duration.toFixed(3),
     '-i', sourcePath,
-    '-filter_complex', filterGraph(assPath),
+    '-filter_complex', filterGraph(assPath, W, H),
     '-map', '[out]', '-map', '0:a?',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '48000',
@@ -104,7 +119,11 @@ function scriptureCues(item, start, end) {
  * Two styles: the spoken caption in the lower third, and the scripture
  * reference pinned under it for six seconds from when it was said.
  */
-export function buildAss(words, offset, scripture) {
+export function buildAss(words, offset, scripture, { W, H }) {
+  // Keep the captions clear of the bottom edge on every shape: a tall frame
+  // can afford a high lower third, a landscape one cannot.
+  const marginV = Math.round(Math.min(H * 0.22, px(420, W)));
+
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${W}
@@ -114,8 +133,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,${config.captionFont},${px(86)},&H00FFFFFF,&H00FFFFFF,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,${px(6)},${px(2)},2,${px(80)},${px(80)},${px(420)},1
-Style: Verse,${config.captionFont},${px(52)},&H00D7B46A,&H00D7B46A,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,${px(5)},0,2,${px(80)},${px(80)},${px(300)},1
+Style: Caption,${config.captionFont},${px(86, W)},&H00FFFFFF,&H00FFFFFF,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,${px(6, W)},${px(2, W)},2,${px(80, W)},${px(80, W)},${marginV},1
+Style: Verse,${config.captionFont},${px(52, W)},&H00D7B46A,&H00D7B46A,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,${px(5, W)},0,2,${px(80, W)},${px(80, W)},${Math.round(marginV * 0.7)},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -138,7 +157,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 // Caption geometry is authored against a 1080-wide frame; scale it with W so
 // a 720 render looks the same, not like 1080 captions shrunk.
-const px = n => Math.round((n * W) / 1080);
+// Caption geometry is authored against a 1080-wide 9:16 frame. A square or
+// landscape clip has far less height, so the lower third moves up with it.
+const px = (n, W) => Math.round((n * W) / 1080);
 
 function ts(seconds) {
   const s = Math.max(0, seconds);
@@ -159,7 +180,7 @@ function ts(seconds) {
  * Proper face tracking replaces this later. Until it exists, cropping a sermon
  * blind is the wrong default.
  */
-function filterGraph(assPath) {
+function filterGraph(assPath, W, H) {
   const ass = `ass=${escapeFilterPath(assPath)}`;
   if (config.clipLayout === 'crop') {
     return [

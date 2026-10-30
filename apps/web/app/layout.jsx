@@ -13,6 +13,8 @@ export default function RootLayout({ children }) {
           <div className="wrap">
             <a href="/" className="brand" style={{ textDecoration: 'none' }}>Beyond <span>Sunday</span></a>
             <span className="small muted">the editing desk for church media</span>
+            <span style={{ flex: 1 }} />
+            <a href="/settings" className="small">Settings</a>
           </div>
         </header>
         <main className="wrap">{children}</main>

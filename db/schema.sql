@@ -86,3 +86,15 @@ alter table sermons alter column source_url drop not null;
 -- The source recording is deleted once its clips exist and it has aged out;
 -- this records when, so the page can explain why a re-render needs a re-upload.
 alter table sermons add column if not exists source_cleaned_at timestamptz;
+
+-- Branding, so every render looks like the church rather than like us.
+alter table churches add column if not exists brand_primary text default '#16140f';
+alter table churches add column if not exists brand_accent  text default '#a9802f';
+alter table churches add column if not exists logo_path     text;
+alter table churches add column if not exists handles       jsonb default '{}'::jsonb;
+alter table churches add column if not exists default_aspect text default '9:16';
+alter table churches add column if not exists logo_token    text;
+
+-- A clip can exist in several shapes; the row is the 9:16 original and this
+-- holds the others as { "1:1": "path", "4:5": "path" }.
+alter table items add column if not exists variants jsonb default '{}'::jsonb;

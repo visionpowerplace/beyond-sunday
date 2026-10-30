@@ -78,3 +78,34 @@ blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--gol
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.5s; } }
+
+/* One deliverable at a time; the rest are a tap away, not a scroll away. */
+.tabs {
+  display: flex; gap: 4px; overflow-x: auto; margin: 22px 0 4px;
+  padding-bottom: 4px; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  white-space: nowrap; text-decoration: none; font-size: 0.9rem; font-weight: 600;
+  color: var(--muted); padding: 9px 14px; border-radius: 999px;
+  border: 1px solid transparent; min-height: 40px;
+}
+.tab:hover { background: var(--card); }
+.tab.on { background: var(--card); border-color: var(--line); color: var(--ink); }
+.tab-count {
+  font-size: 0.74rem; font-weight: 700; min-width: 20px; text-align: center;
+  padding: 1px 6px; border-radius: 999px; background: var(--paper); color: var(--muted);
+}
+.tab.on .tab-count { background: var(--gold); color: #fff; }
+
+/* Carousel slides, shown as the images they now are. */
+.slide-strip {
+  display: flex; gap: 10px; overflow-x: auto; margin-top: 10px;
+  padding-bottom: 6px; scroll-snap-type: x mandatory;
+}
+.slide-strip img {
+  width: 190px; flex: 0 0 auto; border-radius: 10px; border: 1px solid var(--line);
+  scroll-snap-align: start; background: var(--paper);
+}

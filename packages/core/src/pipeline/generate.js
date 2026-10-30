@@ -49,6 +49,10 @@ export async function runGenerate(job) {
     const clips = await sql`select id from items where sermon_id = ${sermon.id} and kind = 'clip' order by ordinal`;
     for (const c of clips) await enqueue({ type: 'render_clip', sermonId: sermon.id, itemId: c.id });
   }
+  if (made.carousel) {
+    const sets = await sql`select id from items where sermon_id = ${sermon.id} and kind = 'carousel' order by ordinal`;
+    for (const c of sets) await enqueue({ type: 'render_carousel', sermonId: sermon.id, itemId: c.id });
+  }
   await settleStatus(sermon.id, job.id);
   return made;
 }

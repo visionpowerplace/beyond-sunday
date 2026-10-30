@@ -10,6 +10,7 @@ import { runTranscribe } from '@bs/core/pipeline/transcribe.js';
 import { runGenerate } from '@bs/core/pipeline/generate.js';
 import { runRenderClip } from '@bs/core/pipeline/render.js';
 import { diskFree, reclaimSpace, human, runDeleteSermon } from '@bs/core/pipeline/cleanup.js';
+import { runRenderCarousel } from '@bs/core/pipeline/carousel.js';
 
 const WORKER_ID = `${process.env.RAILWAY_REPLICA_ID ?? 'local'}-${randomUUID().slice(0, 8)}`;
 const IDLE_MS = 3000;
@@ -20,6 +21,7 @@ const HANDLERS = {
   generate: runGenerate,
   render_clip: runRenderClip,
   delete_sermon: runDeleteSermon,
+  render_carousel: runRenderCarousel,
 };
 
 // What the church sees while each job runs. Keeps the page honest on a retry.
@@ -29,6 +31,7 @@ const STAGE_STATUS = {
   generate: 'generating',
   render_clip: 'rendering',
   delete_sermon: 'deleting',
+  render_carousel: 'rendering',
 };
 
 let running = true;
@@ -204,6 +207,43 @@ async function handleUpload(req, res, url) {
   res.end(JSON.stringify({ ok: true }));
 }
 
+/**
+ * PUT /logo/<churchId>?token=...  — the church's logo, normalised to a square
+ * PNG so every render can place it without thinking about its shape.
+ */
+async function handleLogo(req, res, url) {
+  const churchId = url.pathname.slice('/logo/'.length);
+  const token = url.searchParams.get('token');
+  const fail = (code, msg) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: msg })); };
+
+  if (!/^[0-9a-f-]{36}$/i.test(churchId)) return fail(400, 'bad church id');
+  const [church] = await sql`select id, logo_token from churches where id = ${churchId}`;
+  if (!church) return fail(404, 'no such church');
+  if (!church.logo_token || church.logo_token !== token) return fail(403, 'that logo link is not valid');
+
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 8e6) return fail(413, 'a logo should be under 8MB');
+    chunks.push(chunk);
+  }
+
+  const dir = path.join(config.storageDir, 'brand');
+  await fs.promises.mkdir(dir, { recursive: true });
+  const dest = path.join(dir, `${churchId}.png`);
+  try {
+    const { default: sharp } = await import('sharp');
+    await sharp(Buffer.concat(chunks)).resize(512, 512, { fit: 'inside', withoutEnlargement: true }).png().toFile(dest);
+  } catch (err) {
+    return fail(400, `that file could not be read as an image (${err.message})`);
+  }
+
+  await sql`update churches set logo_path = ${path.relative(config.storageDir, dest)}, logo_token = null where id = ${churchId}`;
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ ok: true }));
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -214,6 +254,9 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'PUT' && url.pathname.startsWith('/upload/')) {
     return handleUpload(req, res, url);
+  }
+  if (req.method === 'PUT' && url.pathname.startsWith('/logo/')) {
+    return handleLogo(req, res, url);
   }
 
   if (url.pathname === '/health') {

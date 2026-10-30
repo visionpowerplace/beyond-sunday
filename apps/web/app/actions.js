@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest, deleteSermon, deleteFailedSermons } from '../lib/data.js';
+import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest, deleteSermon, deleteFailedSermons, renderAspect } from '../lib/data.js';
 import { normalizeSourceUrl, checkSourceUrl } from '@bs/core/source-url.js';
+import { saveBrand, NETWORKS } from '../lib/church.js';
 
 // "12:30" or "750" or blank -> seconds or null. Churches think in mm:ss.
 function toSeconds(raw) {
@@ -68,6 +69,24 @@ export async function retryAction(formData) {
   revalidatePath(`/sermon/${id}`);
 }
 
+export async function saveBrandAction(formData) {
+  const id = String(formData.get('churchId'));
+  const handles = {};
+  for (const n of NETWORKS) {
+    const v = String(formData.get(`handle_${n}`) || '').trim();
+    if (v) handles[n] = v;
+  }
+  await saveBrand(id, {
+    name: String(formData.get('name') || '').trim(),
+    // The text box wins over the swatch: someone pasting a brand hex means it.
+    primary: String(formData.get('primaryHex') || formData.get('primary') || '').trim(),
+    accent: String(formData.get('accentHex') || formData.get('accent') || '').trim(),
+    aspect: String(formData.get('aspect') || ''),
+    handles,
+  });
+  revalidatePath('/settings');
+}
+
 export async function deleteSermonAction(formData) {
   await deleteSermon(String(formData.get('sermonId')));
   // From a sermon page there is nowhere to stay; from the list, stay put.
@@ -78,6 +97,11 @@ export async function deleteSermonAction(formData) {
 export async function deleteFailedAction() {
   await deleteFailedSermons();
   revalidatePath('/');
+}
+
+export async function makeAspectAction(formData) {
+  await renderAspect(String(formData.get('itemId')), String(formData.get('aspect')));
+  revalidatePath(`/sermon/${formData.get('sermonId')}`);
 }
 
 export async function approveAction(formData) {

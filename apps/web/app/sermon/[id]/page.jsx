@@ -1,13 +1,14 @@
 import { getSermon, getItems, assetUrl, uploadUrl, KINDS, pendingGenerations, pendingClipCount } from '../../../lib/data.js';
-import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction } from '../../actions.js';
+import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction, makeAspectAction } from '../../actions.js';
 import { notFound } from 'next/navigation';
 import UploadBox from '../../upload-box.jsx';
 import AddButton from '../../add-button.jsx';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SermonPage({ params }) {
+export default async function SermonPage({ params, searchParams }) {
   const { id } = await params;
+  const query = await searchParams;
   const sermon = await getSermon(id);
   if (!sermon) notFound();
   const items = await getItems(id);
@@ -20,6 +21,14 @@ export default async function SermonPage({ params }) {
   const missing = KINDS.filter(k => !present.includes(k.key) && !pending.includes(k.key));
   // Keep the page refreshing while anything at all is still being made.
   const busy = working || pending.length > 0 || clipsLeft > 0;
+
+  // One kind at a time. The page used to be every deliverable stacked into a
+  // single column, which meant scrolling past forty cards to reach the
+  // devotional.
+  const available = KINDS.filter(k => present.includes(k.key) || pending.includes(k.key));
+  const tab = available.find(k => k.key === query?.show)?.key ?? available[0]?.key ?? null;
+  const shown = available.filter(k => k.key === tab);
+  const counts = Object.fromEntries(available.map(k => [k.key, items.filter(i => i.kind === k.key).length]));
 
   return (
     <>
@@ -85,7 +94,19 @@ export default async function SermonPage({ params }) {
         </div>
       )}
 
-      {KINDS.filter(k => present.includes(k.key) || pending.includes(k.key)).map(kind => {
+      {available.length > 1 && (
+        <nav className="tabs" aria-label="Deliverables">
+          {available.map(k => (
+            <a key={k.key} href={`?show=${k.key}`} className={`tab${k.key === tab ? ' on' : ''}`}
+               aria-current={k.key === tab ? 'page' : undefined}>
+              {k.label}
+              <span className="tab-count">{pending.includes(k.key) && !counts[k.key] ? '…' : counts[k.key]}</span>
+            </a>
+          ))}
+        </nav>
+      )}
+
+      {shown.map(kind => {
         const group = items.filter(i => i.kind === kind.key);
         const making = pending.includes(kind.key);
         return (
@@ -135,6 +156,9 @@ export default async function SermonPage({ params }) {
   );
 }
 
+// 9:16 is always made; these are the extras a church can ask for per clip.
+const OTHER_ASPECTS = ['4:5', '1:1', '16:9'];
+
 function Working({ label }) {
   return (
     <div className="row" style={{ gap: 10 }}>
@@ -179,7 +203,21 @@ function ItemCard({ item, sermonId }) {
       {item.kind === 'clip' && (item.asset_path
         ? <>
             <video controls preload="metadata" playsInline src={assetUrl(item.asset_path)} style={{ marginTop: 10, maxHeight: 520 }} />
-            <a className="small" href={assetUrl(item.asset_path)} download>Download this clip</a>
+            <div className="row small" style={{ marginTop: 8 }}>
+              <a href={assetUrl(item.asset_path)} download>Download 9:16</a>
+              {Object.entries(item.variants ?? {}).map(([aspect, p]) => (
+                <a key={aspect} href={assetUrl(p)} download>Download {aspect}</a>
+              ))}
+              <span className="spacer" />
+              {OTHER_ASPECTS.filter(a => !(item.variants ?? {})[a]).map(aspect => (
+                <form action={makeAspectAction} key={aspect}>
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <input type="hidden" name="sermonId" value={sermonId} />
+                  <input type="hidden" name="aspect" value={aspect} />
+                  <button className="small" style={{ minHeight: 30, padding: '3px 9px' }}>Make {aspect}</button>
+                </form>
+              ))}
+            </div>
           </>
         : <p className="small muted">Still rendering…</p>)}
 
@@ -190,12 +228,28 @@ function ItemCard({ item, sermonId }) {
       {body.question && <p className="small"><b>Reflect:</b> {body.question}</p>}
       {body.prayer && <p className="small muted">{body.prayer}</p>}
 
-      {Array.isArray(body.slides) && body.slides.length > 0 && (
-        <div className="slides">
-          {body.slides.map((s, i) => (
-            <div className="slide" key={i}><b>{s.heading}</b><span>{s.body}</span></div>
-          ))}
-        </div>
+      {Array.isArray(body.images) && body.images.length > 0 ? (
+        <>
+          <div className="slide-strip">
+            {body.images.map((src, i) => (
+              <a key={i} href={assetUrl(src)} target="_blank" rel="noreferrer">
+                <img src={assetUrl(src)} alt={`Slide ${i + 1}`} loading="lazy" />
+              </a>
+            ))}
+          </div>
+          <p className="small muted" style={{ margin: '6px 0 0' }}>
+            Tap a slide to open it full size, then save it.
+          </p>
+        </>
+      ) : Array.isArray(body.slides) && body.slides.length > 0 && (
+        <>
+          {item.kind === 'carousel' && <p className="small muted">Designing these slides…</p>}
+          <div className="slides">
+            {body.slides.map((s, i) => (
+              <div className="slide" key={i}><b>{s.heading}</b><span>{s.body}</span></div>
+            ))}
+          </div>
+        </>
       )}
 
       {body.caption && (

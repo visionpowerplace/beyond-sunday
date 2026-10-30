@@ -16,9 +16,12 @@
     "./pipeline/render.js": "./src/pipeline/render.js",
     "./pipeline/prompts.js": "./src/pipeline/prompts.js",
     "./source-url.js": "./src/source-url.js",
-    "./pipeline/cleanup.js": "./src/pipeline/cleanup.js"
+    "./pipeline/cleanup.js": "./src/pipeline/cleanup.js",
+    "./brand.js": "./src/brand.js",
+    "./pipeline/carousel.js": "./src/pipeline/carousel.js"
   },
   "dependencies": {
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "sharp": "^0.33.5"
   }
 }

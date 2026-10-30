@@ -9,7 +9,7 @@ import { useState } from 'react';
  * 1.5GB service recording on church wifi takes long enough that a progress bar
  * is the difference between waiting and reloading the page.
  */
-export default function UploadBox({ url }) {
+export default function UploadBox({ url, accept = 'video/*,audio/*', label = 'Choose the recording' }) {
   const [pct, setPct] = useState(null);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(false);
@@ -34,8 +34,8 @@ export default function UploadBox({ url }) {
 
   return (
     <div>
-      <label htmlFor="file">Choose the recording</label>
-      <input id="file" type="file" accept="video/*,audio/*" disabled={pct !== null}
+      <label htmlFor="file">{label}</label>
+      <input id="file" type="file" accept={accept} disabled={pct !== null}
              onChange={e => send(e.target.files?.[0])} />
       {pct !== null && (
         <>

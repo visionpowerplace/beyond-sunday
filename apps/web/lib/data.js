@@ -114,6 +114,18 @@ export async function deleteFailedSermons() {
   return rows.length;
 }
 
+/** Re-cut one clip in another shape, from the same source. */
+export async function renderAspect(itemId, aspect) {
+  const [item] = await sql`select sermon_id from items where id = ${itemId}`;
+  if (!item) return;
+  const [dupe] = await sql`
+    select 1 from jobs where item_id = ${itemId} and type = 'render_clip'
+      and status in ('queued','running') and payload->>'aspect' = ${aspect}`;
+  if (dupe) return;
+  await sql`update sermons set status = 'rendering', updated_at = now() where id = ${item.sermon_id}`;
+  await enqueue({ type: 'render_clip', sermonId: item.sermon_id, itemId, payload: { aspect } });
+}
+
 export async function retryIngest(sermonId) {
   await sql`update sermons set status = 'queued', error = null, updated_at = now() where id = ${sermonId}`;
   await enqueue({ type: 'ingest', sermonId });

@@ -13,6 +13,10 @@ Upload a sermon. The pipeline transcribes it with word-level timings, then makes
 | Summary | 150 words for whoever missed Sunday |
 | Five-day devotional | Monday to Friday, each day a different part of the message |
 
+Carousel slides are rendered as real 1080x1350 images in the church's own colours, with the logo and a background drawn to match what each slide says — a seed for growth, a path for direction, a shield for protection. Twelve motifs, all drawn from shapes, so nothing is anyone else's photograph. Clips come out 9:16 and can be re-cut per clip to 4:5, 1:1 or 16:9 from the same source.
+
+Branding lives in **Settings**: colours, logo, handles and the default clip size, applied to every render.
+
 Carousels and write-ups are built on the highlight points, so asking for either one makes the points first if they are not there yet.
 
 Clips are generated automatically after transcription, because that is what a church is waiting for. The rest sit behind buttons on the sermon page: a church that only wants a devotional pays for one call, not six.

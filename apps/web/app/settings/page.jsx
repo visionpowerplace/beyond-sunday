@@ -114,10 +114,11 @@ export default async function Settings({ searchParams }) {
         <UploadBox url={upload} accept="image/*" label="Choose a logo" />
       </div>
 
-      <h2>Your YouTube channel</h2>
+      <h2>YouTube, for reading captions</h2>
       <p className="small muted" style={{ margin: 0 }}>
-        Connect it once and a sermon can start from a YouTube link: we read the caption track off your
-        own video, so there is nothing to upload and nothing to transcribe.
+        Connect the channel once and a sermon can start from a YouTube link: we read the caption track
+        off your own video, so there is nothing to upload and nothing to transcribe. This is separate
+        from connecting YouTube to post — that one is further down.
       </p>
       <div className="card">
         {!googleReady ? (
@@ -153,7 +154,7 @@ export default async function Settings({ searchParams }) {
         )}
       </div>
 
-      <h2>Connected accounts</h2>
+      <h2>Accounts to post to</h2>
       {params?.connected && <div className="card" style={{ borderColor: 'var(--good)' }}>Connected {String(params.connected)}.</div>}
       {params?.error && <div className="flag">Could not connect: {String(params.error_message || params.error)}</div>}
 
@@ -170,7 +171,8 @@ export default async function Settings({ searchParams }) {
         <>
           <p className="small muted" style={{ margin: 0 }}>
             Approved items post to whichever of these you pick. Connecting opens the network&rsquo;s own
-            sign-in; we never see your password.
+            sign-in; we never see your password. Connecting YouTube here lets us post to it, which is a
+            different permission from reading your captions above — a church that wants both connects both.
           </p>
           <div className="card">
             {accounts.length > 0 && accounts.map(a => (

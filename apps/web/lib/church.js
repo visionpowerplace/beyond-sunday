@@ -78,11 +78,18 @@ export async function disconnectAccount(accountId) {
   await zernio.disconnect(accountId);
 }
 
-/** Platforms worth offering a church, in the order they matter to one. */
+/**
+ * Platforms worth offering a church, in the order they matter to one.
+ *
+ * YouTube appears twice in Settings and the two are not the same thing: this
+ * one posts, the one above reads captions off the church's own videos. The
+ * labels say which is which, because "Connect YouTube" twice on one page is
+ * a question nobody should have to work out.
+ */
 export const CONNECTABLE = [
   { key: 'facebook',  label: 'Facebook Page' },
   { key: 'instagram', label: 'Instagram' },
-  { key: 'youtube',   label: 'YouTube' },
+  { key: 'youtube',   label: 'YouTube (to post)' },
   { key: 'tiktok',    label: 'TikTok' },
   { key: 'threads',   label: 'Threads' },
   { key: 'twitter',   label: 'X' },

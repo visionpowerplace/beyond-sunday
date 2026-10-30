@@ -57,31 +57,39 @@ const HIGHLIGHT_TASK = `Find the things this sermon actually argued. Not topics 
 
 const CAROUSEL_TASK = `Turn each point below into a slide carousel.
 
-Each slide carries a "motif": the background image drawn behind its words. Choose the one that matches what the slide actually says, not one at random, and vary them across a carousel. The choices are:
+Each slide carries an "image_prompt": the photograph drawn behind its words. Describe a real scene a photographer could have taken, concrete and specific, that carries the slide's idea without illustrating it literally.
 
-- light     breakthrough, revelation, seeing clearly, glory
-- path      direction, a journey, following, obedience, the long road
-- water     cleansing, refreshing, the Spirit, depth, stillness
-- mountain  difficulty, perseverance, a high calling, endurance
-- seed      growth, small beginnings, patience, sowing and reaping
-- fire      passion, zeal, refining, the Spirit's power
-- anchor    hope, steadiness, holding on, faithfulness in trouble
-- door      opportunity, invitation, access, a new season
-- crown     authority, victory, reward, the kingship of Christ
-- shield    protection, faith as defence, spiritual warfare
-- bread     provision, communion, daily need, feeding on the word
-- dawn      a new beginning, mercy each morning, hope after a hard night
+Good: "a young green seedling pushing up through dark soil, early morning light across a garden"
+Good: "an open Bible and a cup of coffee on a worn wooden table beside a sunlit window"
+Good: "a narrow footpath through tall grass at sunrise, disappearing over a rise"
+Bad: "prayer" (not a scene)
+Bad: "a glowing cross in the sky with light beams" (not a photograph anyone took)
+Bad: "a man praying with the words Pray Or Faint" (never ask for text in the image)
+
+Rules for image_prompt:
+- One sentence, under 25 words, describing what is in the frame and the light.
+- No text, letters, numbers or signs in the scene.
+- No recognisable public figures, no depictions of Jesus or God, no church logos.
+- Faces are fine but keep them incidental; hands, light, landscape and objects usually carry an idea better than a posed face.
+- Vary the scenes across a carousel: not five pictures of the same sunrise.
+
+Also give each slide a "motif" from this list, used as the fallback background if the photograph cannot be made. Choose the one that matches the slide: light (breakthrough, revelation), path (direction, a journey), water (cleansing, the Spirit, depth), mountain (difficulty, endurance), seed (growth, patience), fire (passion, refining), anchor (hope, steadiness), door (opportunity, a new season), crown (authority, victory), shield (protection, warfare), bread (provision, daily need), dawn (a new beginning, mercy).
 
 {
   "carousels": [
     { "highlight_index": 0,
       "title": "slide-one headline, under 8 words",
-      "slides": [ { "heading": "under 6 words", "body": "under 25 words", "motif": "seed" } ],
+      "slides": [
+        { "heading": "under 5 words",
+          "body": "under 22 words",
+          "motif": "seed",
+          "image_prompt": "a young green seedling pushing up through dark soil, early morning light across a garden" }
+      ],
       "caption": "2-3 sentences" }
   ]
 }
 
-One carousel per point, 4 to 6 slides each. The heading must be under 6 words and the body under 25: these are drawn onto an image and longer text is cut off.`;
+One carousel per point, 4 to 6 slides each. The heading must be under 5 words and the body under 22: these are set in large type over a photograph, and longer text is cut off.`;
 
 const WRITEUP_TASK = `Write a short post developing each point below.
 

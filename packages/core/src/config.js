@@ -38,6 +38,16 @@ export const config = {
     groqModel: env.GROQ_WHISPER_MODEL || 'whisper-large-v3-turbo',
   },
 
+  // Photographs for carousel slides. 'pollinations' needs no account and no
+  // card; 'openrouter' is better and costs per image; 'none' keeps the drawn
+  // backgrounds.
+  image: {
+    provider: env.IMAGE_PROVIDER || 'pollinations',
+    model: env.IMAGE_MODEL || '',
+    timeoutMs: Number(env.IMAGE_TIMEOUT_MS || 120_000),
+    localPath: env.IMAGE_LOCAL_PATH || '',
+  },
+
   // Posting goes through a provider that has already passed Meta's app review,
   // TikTok's content-posting audit and YouTube's compliance audit.
   zernio: {

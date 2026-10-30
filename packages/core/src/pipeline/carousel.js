@@ -3,21 +3,23 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { config } from '../config.js';
 import { sql } from '../db.js';
-import { brandOf, ASPECTS, readableOn, mix } from '../brand.js';
+import { brandOf, mix } from '../brand.js';
 import { motif, MOTIF_NAMES } from './motifs.js';
+import { generateImage, photoPrompt } from '../providers/image.js';
 
 /**
- * Carousel slides as real images.
+ * Carousel slides.
  *
- * A plain text card is something a church already knows how to make badly in
- * Canva. The point of making them here is that they come out looking like the
- * church — its colours and its logo — with a background chosen to match what
- * the slide actually says.
- *
- * Rendered from SVG by sharp, so there is no browser in the worker image.
+ * A photograph of the idea, a light wash over it, and editorial type on top:
+ * the church's colours, a serif headline, its name along the bottom. If the
+ * photograph cannot be made the slide still renders on its drawn background,
+ * because a missing picture must never cost a church its content.
  */
 
-const SIZE = { w: 1080, h: 1350 };   // 4:5, the shape that fills the most feed
+const W = 1080, H = 1350;              // 4:5, the shape that fills the most feed
+const PAD = 88;
+const HEAD = 'Lora, DejaVu Serif, Georgia, serif';
+const BODY = 'DejaVu Sans, sans-serif';
 
 export async function runRenderCarousel(job) {
   const [item] = await sql`select * from items where id = ${job.item_id}`;
@@ -34,117 +36,175 @@ export async function runRenderCarousel(job) {
 
   const logo = await loadLogo(brand.logoPath);
   const paths = [];
+  let withPhoto = 0;
 
   for (const [i, slide] of slides.entries()) {
-    const svg = slideSvg({
-      slide, index: i, total: slides.length,
-      title: item.title, brand, logo,
-      motifName: pickMotif(slide, i),
-    });
+    // Photographs are made one at a time rather than in parallel: the free
+    // generator rate-limits a burst and returns nothing for half the deck.
+    const photo = await backdropFor(slide, i, item.id);
+    if (photo) withPhoto++;
+
     const out = path.join(dir, `${String(i + 1).padStart(2, '0')}.png`);
-    await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toFile(out);
+    await compose({ slide, index: i, total: slides.length, title: item.title, brand, logo, photo, out });
     paths.push(path.relative(config.storageDir, out));
   }
 
   await sql`
     update items set body = body || ${sql.json({ images: paths })}, updated_at = now()
     where id = ${item.id}`;
-  return { slides: paths.length };
+  return { slides: paths.length, photos: withPhoto };
+}
+
+/** The photograph, resized to fill the frame. Null when there isn't one. */
+async function backdropFor(slide, index, itemId) {
+  const scene = slide.image_prompt || slide.scene;
+  if (!scene) return null;
+
+  // A stable seed so re-rendering the same slide does not reshuffle the deck.
+  const seed = [...`${itemId}${index}`].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 1e6, 7);
+  const bytes = await generateImage(photoPrompt(scene), { width: W, height: H, seed });
+  if (!bytes) return null;
+
+  try {
+    return await sharp(bytes).resize(W, H, { fit: 'cover', position: 'attention' }).png().toBuffer();
+  } catch (err) {
+    console.error(`[carousel] could not read the generated image: ${err.message}`);
+    return null;
+  }
+}
+
+async function compose({ slide, index, total, title, brand, logo, photo, out }) {
+  const layers = [];
+
+  if (photo) {
+    layers.push({ input: photo, top: 0, left: 0 });
+  } else {
+    // No photograph: fall back to the drawn background, which at least
+    // carries the church's colours and the idea of the slide.
+    const name = MOTIF_NAMES.includes(String(slide.motif).toLowerCase())
+      ? String(slide.motif).toLowerCase()
+      : MOTIF_NAMES[index % MOTIF_NAMES.length];
+    const { defs, body } = motif(name, { w: W, h: H, primary: brand.primary, accent: brand.accent, index });
+    layers.push({
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs>${defs}</defs>${body}</svg>`),
+      top: 0, left: 0,
+    });
+  }
+
+  layers.push({ input: Buffer.from(typeLayer({ slide, index, total, title, brand, photo: Boolean(photo) })), top: 0, left: 0 });
+  if (logo) layers.push({ input: logo, top: PAD - 20, left: W - PAD - 96 });
+
+  await sharp({ create: { width: W, height: H, channels: 3, background: brand.primary } })
+    .composite(layers)
+    .png({ compressionLevel: 9 })
+    .toFile(out);
 }
 
 /**
- * The model names a motif per slide; anything unrecognised falls back to a
- * stable choice so the same slide always looks the same.
+ * The wash and the words.
+ *
+ * Over a photograph the wash is a pale paper tone and the text is the
+ * church's dark colour; on the drawn background it inverts. Either way the
+ * words sit on something solid rather than on whatever the picture happens
+ * to contain.
  */
-function pickMotif(slide, index) {
-  const named = String(slide.motif ?? '').toLowerCase().trim();
-  if (MOTIF_NAMES.includes(named)) return named;
-  const seed = [...String(slide.heading ?? index)].reduce((n, c) => n + c.charCodeAt(0), 0);
-  return MOTIF_NAMES[seed % MOTIF_NAMES.length];
-}
+function typeLayer({ slide, index, total, title, brand, photo }) {
+  const onPhoto = photo;
+  const paper = '#f7f4ec';
+  const ink = onPhoto ? darken(brand.primary) : '#ffffff';
+  const quiet = onPhoto ? mix(ink, paper, 0.25) : mix('#ffffff', brand.primary, 0.3);
+  const wash = onPhoto ? paper : mix(brand.primary, '#000000', 0.5);
 
-function slideSvg({ slide, index, total, title, brand, logo, motifName }) {
-  const { w, h } = SIZE;
-  const { defs, body, ink } = motif(motifName, { w, h, primary: brand.primary, accent: brand.accent, index });
-  const quiet = mix(ink, brand.primary, 0.3);
-  const scrimColor = ink === '#ffffff' ? mix(brand.primary, '#000000', 0.45) : '#ffffff';
+  const eyebrow = String(title ?? '').toUpperCase().slice(0, 42);
+  // The headline is the slide. Break it narrow so it stacks into two or three
+  // big lines rather than running quietly across the top.
+  const headLines = wrapByWidth(slide.heading ?? '', 11.5, 4);
+  const bodyLines = wrapByWidth(slide.body ?? '', 30, 5);
 
-  const pad = 88;
-  const headingLines = wrap(slide.heading ?? '', 17);
-  const bodyLines = wrap(slide.body ?? '', 34);
+  const headSize = headLines.length >= 4 ? 84 : headLines.length === 3 ? 104 : 126;
+  const headLead = headSize * 0.92;
 
-  // Text is anchored to the bottom and the art lives above it, with a scrim
-  // in between. Centring the text meant the motif drew straight through it —
-  // a stem across a sentence, a horizon line through a heading.
-  const footer = h - pad - 70;
-  const bodyBottom = footer - 40;
-  const bodyTop = bodyBottom - (bodyLines.length - 1) * 44;
-  const headBottom = bodyTop - (bodyLines.length ? 54 : 0);
-  const headTop = headBottom - (headingLines.length - 1) * 68;
-  const scrimTop = Math.max(h * 0.3, headTop - 150);
+  const top = PAD + 18;
+  const ruleY = top + 26;
+  const headTop = ruleY + 56 + headSize * 0.74;
+  const bodyTop = headTop + (headLines.length - 1) * headLead + 68;
+  const washBottom = Math.min(H - PAD - 90, bodyTop + bodyLines.length * 46 + 70);
 
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-  <defs>${defs}
-    <linearGradient id="scrim${index}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${scrimColor}" stop-opacity="0"/>
-      <stop offset="45%" stop-color="${scrimColor}" stop-opacity="0.72"/>
-      <stop offset="100%" stop-color="${scrimColor}" stop-opacity="0.93"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <linearGradient id="wash" x1="0" y1="0" x2="0.25" y2="1">
+      <stop offset="0%" stop-color="${wash}" stop-opacity="${onPhoto ? 0.97 : 0.9}"/>
+      <stop offset="${Math.round((washBottom / H) * 70)}%" stop-color="${wash}" stop-opacity="${onPhoto ? 0.9 : 0.8}"/>
+      <stop offset="100%" stop-color="${wash}" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="foot" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="${onPhoto ? '#0e0c08' : wash}" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="${onPhoto ? '#0e0c08' : wash}" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  ${body}
-  <rect x="0" y="${scrimTop}" width="${w}" height="${h - scrimTop}" fill="url(#scrim${index})"/>
 
-  <text x="${pad}" y="${pad + 18}" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="700"
-        letter-spacing="3" fill="${brand.accent}">${esc((title ?? '').toUpperCase().slice(0, 34))}</text>
+  <rect x="0" y="0" width="${W}" height="${washBottom}" fill="url(#wash)"/>
+  <rect x="0" y="${H - 240}" width="${W}" height="240" fill="url(#foot)"/>
 
-  ${headingLines.map((line, i) => `
-  <text x="${pad}" y="${headTop + i * 68}" font-family="DejaVu Sans, sans-serif" font-size="62"
+  <text x="${PAD}" y="${top}" font-family="${BODY}" font-size="25" font-weight="700"
+        letter-spacing="4.2" fill="${brand.accent}">${esc(eyebrow)}</text>
+  <rect x="${PAD}" y="${ruleY}" width="${Math.min(W - PAD * 2, 190 + eyebrow.length * 11)}" height="3" fill="${brand.accent}"/>
+
+  ${headLines.map((line, i) => `
+  <text x="${PAD}" y="${headTop + i * headLead}" font-family="${HEAD}" font-size="${headSize}"
         font-weight="700" fill="${ink}">${esc(line)}</text>`).join('')}
 
   ${bodyLines.map((line, i) => `
-  <text x="${pad}" y="${bodyTop + i * 44}" font-family="DejaVu Sans, sans-serif" font-size="32"
+  <text x="${PAD}" y="${bodyTop + i * 46}" font-family="${BODY}" font-size="35"
         fill="${quiet}">${esc(line)}</text>`).join('')}
 
-  <rect x="${pad}" y="${h - pad - 46}" width="${Math.max(54, 34 + String(brand.name).length * 15)}" height="4" fill="${brand.accent}" opacity="0.8"/>
-  <text x="${pad}" y="${h - pad}" font-family="DejaVu Sans, sans-serif" font-size="27" fill="${quiet}">${esc(brand.name)}</text>
+  <rect x="${PAD}" y="${H - PAD - 48}" width="104" height="3" fill="${brand.accent}"/>
+  <text x="${PAD}" y="${H - PAD}" font-family="${BODY}" font-size="28" font-weight="600"
+        fill="${onPhoto ? '#ffffff' : '#ffffff'}">${esc(brand.name)}</text>
 
-  ${dots({ w, h, pad, index, total, accent: brand.accent, ink })}
-  ${logo ? `<image x="${w - pad - 108}" y="${pad - 24}" width="108" height="108"
-        preserveAspectRatio="xMidYMid meet" href="${logo}"/>` : ''}
+  ${Array.from({ length: total }, (_, i) =>
+    `<circle cx="${W - PAD - (total - 1 - i) * 26}" cy="${H - PAD - 9}" r="7.5"
+             fill="${i === index ? brand.accent : '#ffffff'}" opacity="${i === index ? 1 : 0.45}"/>`).join('')}
 </svg>`;
 }
 
-function dots({ w, h, pad, index, total, accent, ink }) {
-  const r = 7, gap = 24;
-  const startX = w - pad - (total - 1) * gap;
-  return Array.from({ length: total }, (_, i) =>
-    `<circle cx="${startX + i * gap}" cy="${h - pad - 8}" r="${r}" fill="${i === index ? accent : ink}" opacity="${i === index ? 1 : 0.3}"/>`
-  ).join('');
+/** A dark, readable version of the brand colour for text on a pale wash. */
+function darken(hex) {
+  const n = hex.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(n.slice(i, i + 2), 16) / 255);
+  const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return L > 0.3 ? mix(hex, '#000000', 0.62) : hex;
 }
 
-/** svg does not wrap text, so lines are broken here by character budget. */
-function wrap(text, perLine) {
+/**
+ * svg does not wrap, so lines are broken here. Measured by approximate glyph
+ * width rather than character count, because "Illuminating" and "WOW WOW" are
+ * not the same width at the same length.
+ */
+function wrapByWidth(text, perLine, maxLines) {
   const words = String(text).trim().split(/\s+/).filter(Boolean);
   const lines = [];
   let line = '';
   for (const word of words) {
-    if (!line.length) line = word;
-    else if ((line + ' ' + word).length <= perLine) line += ' ' + word;
+    const candidate = line ? `${line} ${word}` : word;
+    if (width(candidate) <= perLine || !line) line = candidate;
     else { lines.push(line); line = word; }
   }
   if (line) lines.push(line);
-  return lines.slice(0, 8);
+  return lines.slice(0, maxLines);
 }
 
-/** The logo is embedded as a data URI; sharp will not fetch a file from SVG. */
+const NARROW = new Set([...`ijltfrI .,;:!'`]);
+const WIDE = new Set([...'mwMW']);
+const width = s => [...s].reduce((n, c) => n + (NARROW.has(c) ? 0.46 : WIDE.has(c) ? 1.42 : 1), 0);
+
 async function loadLogo(logoPath) {
   if (!logoPath) return null;
-  const full = path.join(config.storageDir, logoPath);
   try {
-    const png = await sharp(full).resize(216, 216, { fit: 'inside' }).png().toBuffer();
-    return `data:image/png;base64,${png.toString('base64')}`;
+    return await sharp(path.join(config.storageDir, logoPath))
+      .resize(96, 96, { fit: 'inside' }).png().toBuffer();
   } catch {
     return null;   // a missing or broken logo is not a reason to fail the slide
   }

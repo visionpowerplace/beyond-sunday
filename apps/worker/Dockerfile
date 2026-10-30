@@ -6,10 +6,17 @@ FROM node:22-bookworm-slim
 # runtime to solve its signature challenge, and yt-dlp has deprecated
 # extraction without one. Without deno the download fails or loses formats.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ffmpeg python3 fonts-dejavu-core ca-certificates curl unzip \
+      ffmpeg python3 fonts-dejavu fonts-dejavu-core fonts-liberation2 \
+      ca-certificates curl unzip fontconfig \
  && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- --yes \
  && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
  && chmod a+rx /usr/local/bin/yt-dlp \
+ && mkdir -p /usr/share/fonts/truetype/lora \
+ && curl -fsSL -o /usr/share/fonts/truetype/lora/Lora-Bold.ttf \
+      https://github.com/google/fonts/raw/main/ofl/lora/static/Lora-Bold.ttf \
+ && curl -fsSL -o /usr/share/fonts/truetype/lora/Lora-Regular.ttf \
+      https://github.com/google/fonts/raw/main/ofl/lora/static/Lora-Regular.ttf \
+ && fc-cache -f \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -145,11 +145,37 @@ export async function setItemStatus(id, status, reason) {
 }
 
 export async function scheduleItem(id, when, networks) {
-  await sql`
-    update items set scheduled_for = ${when || null}, networks = ${networks ?? []},
-      status = case when ${when ? true : false} then 'scheduled' else status end,
-      updated_at = now()
-    where id = ${id}`;
+  // Rescheduling cancels the old job rather than racing it, and a fresh
+  // idempotency key means the provider treats this as a new post.
+  await sql`delete from jobs where item_id = ${id} and type = 'publish' and status = 'queued'`;
+
+  if (!when || !networks?.length) {
+    await sql`
+      update items set scheduled_for = null, networks = ${networks ?? []},
+        status = case when status = 'scheduled' then 'approved' else status end, updated_at = now()
+      where id = ${id}`;
+    return;
+  }
+
+  const key = randomUUID();
+  const [item] = await sql`
+    update items set scheduled_for = ${when}, networks = ${networks}, status = 'scheduled',
+      publish_key = ${key}, post_error = null, updated_at = now()
+    where id = ${id} returning sermon_id`;
+
+  await enqueue({ type: 'publish', sermonId: item.sermon_id, itemId: id, runAfter: when, maxAttempts: 4 });
+}
+
+/** Send an approved item now rather than at a time. */
+export async function publishNow(id) {
+  await sql`delete from jobs where item_id = ${id} and type = 'publish' and status = 'queued'`;
+  const key = randomUUID();
+  const [item] = await sql`
+    update items set publish_key = ${key}, post_error = null, updated_at = now()
+    where id = ${id} returning sermon_id, networks`;
+  if (!item?.networks?.length) return false;
+  await enqueue({ type: 'publish', sermonId: item.sermon_id, itemId: id, maxAttempts: 4 });
+  return true;
 }
 
 /** Free space, read from the worker — the web service cannot see the volume. */

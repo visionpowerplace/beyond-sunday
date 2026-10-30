@@ -127,6 +127,7 @@ const STATUS_LABELS = {
   generating: 'writing',
   rendering: 'rendering clips',
   deleting: 'deleting',
+  posted: 'posted',
 };
 
 function StatusPill({ status }) {

@@ -2,9 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest, deleteSermon, deleteFailedSermons, renderAspect } from '../lib/data.js';
+import { createSermon, setItemStatus, scheduleItem, setWindow, generateKinds, retryIngest, deleteSermon, deleteFailedSermons, renderAspect, publishNow } from '../lib/data.js';
 import { normalizeSourceUrl, checkSourceUrl } from '@bs/core/source-url.js';
-import { saveBrand, NETWORKS } from '../lib/church.js';
+import { saveBrand, NETWORKS, getChurch, startConnect, disconnectAccount } from '../lib/church.js';
 
 // "12:30" or "750" or blank -> seconds or null. Churches think in mm:ss.
 function toSeconds(raw) {
@@ -87,6 +87,32 @@ export async function saveBrandAction(formData) {
   revalidatePath('/settings');
 }
 
+export async function connectAccountAction(formData) {
+  const church = await getChurch(String(formData.get('churchId')));
+  const platform = String(formData.get('platform'));
+  let url;
+  try {
+    url = await startConnect(church, platform, `${appUrl()}/settings?church=${church.id}`);
+  } catch (err) {
+    redirect(`/settings?church=${church.id}&error=connect&error_message=${encodeURIComponent(err.message)}`);
+  }
+  // The network's own sign-in page; nothing of ours sees the password.
+  redirect(url);
+}
+
+export async function disconnectAccountAction(formData) {
+  try {
+    await disconnectAccount(String(formData.get('accountId')));
+  } catch { /* already gone is fine */ }
+  revalidatePath('/settings');
+}
+
+/** Where the network should send the volunteer back to. */
+function appUrl() {
+  return (process.env.APP_URL || process.env.PUBLIC_URL || '').replace(/\/$/, '')
+    || 'http://localhost:3000';
+}
+
 export async function deleteSermonAction(formData) {
   await deleteSermon(String(formData.get('sermonId')));
   // From a sermon page there is nowhere to stay; from the list, stay put.
@@ -116,6 +142,12 @@ export async function rejectAction(formData) {
 
 export async function scheduleAction(formData) {
   const when = String(formData.get('when') || '');
-  await scheduleItem(String(formData.get('id')), when ? new Date(when) : null, formData.getAll('networks').map(String));
+  const networks = formData.getAll('networks').map(String);
+  await scheduleItem(String(formData.get('id')), when ? new Date(when) : null, networks);
+  revalidatePath(`/sermon/${formData.get('sermonId')}`);
+}
+
+export async function publishNowAction(formData) {
+  await publishNow(String(formData.get('id')));
   revalidatePath(`/sermon/${formData.get('sermonId')}`);
 }

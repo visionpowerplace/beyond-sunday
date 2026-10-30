@@ -38,6 +38,12 @@ export const config = {
     groqModel: env.GROQ_WHISPER_MODEL || 'whisper-large-v3-turbo',
   },
 
+  // Posting goes through a provider that has already passed Meta's app review,
+  // TikTok's content-posting audit and YouTube's compliance audit.
+  zernio: {
+    apiKey: env.ZERNIO_API_KEY || '',
+  },
+
   llm: {
     provider: env.LLM_PROVIDER || 'mock',
     openrouterKey: env.OPENROUTER_API_KEY || '',

@@ -1,5 +1,6 @@
 import { getSermon, getItems, assetUrl, uploadUrl, KINDS, pendingGenerations, pendingClipCount } from '../../../lib/data.js';
-import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction, makeAspectAction } from '../../actions.js';
+import { getChurch, connectedAccounts, postingConfigured } from '../../../lib/church.js';
+import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction, makeAspectAction, publishNowAction } from '../../actions.js';
 import { notFound } from 'next/navigation';
 import UploadBox from '../../upload-box.jsx';
 import AddButton from '../../add-button.jsx';
@@ -15,6 +16,9 @@ export default async function SermonPage({ params, searchParams }) {
 
   const working = ['queued', 'ingesting', 'transcribing', 'generating', 'rendering'].includes(sermon.status);
   const upload = uploadUrl(sermon);
+  const church = await getChurch(sermon.church_id);
+  const accounts = postingConfigured() ? await connectedAccounts(church) : [];
+  const networks = [...new Set(accounts.map(a => a.platform))];
   const pending = await pendingGenerations(id);
   const clipsLeft = await pendingClipCount(id);
   const present = [...new Set(items.map(i => i.kind))];
@@ -128,7 +132,7 @@ export default async function SermonPage({ params, searchParams }) {
             {making && !group.length && (
               <div className="card"><Working label={kind.label} /></div>
             )}
-            {group.map(item => <ItemCard key={item.id} item={item} sermonId={sermon.id} />)}
+            {group.map(item => <ItemCard key={item.id} item={item} sermonId={sermon.id} networks={networks} />)}
           </section>
         );
       })}
@@ -180,7 +184,7 @@ function labelFor(status) {
   }[status] ?? status.replace(/_/g, ' ');
 }
 
-function ItemCard({ item, sermonId }) {
+function ItemCard({ item, sermonId, networks }) {
   const body = item.body ?? {};
   const flags = item.flags ?? [];
   const scripture = item.scripture ?? [];
@@ -279,20 +283,57 @@ function ItemCard({ item, sermonId }) {
         </form>
       </div>
 
-      {item.status === 'approved' && (
-        <form action={scheduleAction} className="row" style={{ marginTop: 10 }}>
-          <input type="hidden" name="id" value={item.id} />
-          <input type="hidden" name="sermonId" value={sermonId} />
-          <input type="datetime-local" name="when" style={{ flex: 1, minWidth: 190 }} />
-          <select name="networks" multiple size={1} style={{ flex: 1, minWidth: 150 }}>
-            <option value="facebook">Facebook</option>
-            <option value="instagram">Instagram</option>
-            <option value="tiktok">TikTok</option>
-            <option value="youtube">YouTube</option>
-          </select>
-          <button>Schedule</button>
-        </form>
+      {['approved', 'scheduled'].includes(item.status) && (
+        networks.length ? (
+          <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+            <form action={scheduleAction}>
+              <input type="hidden" name="id" value={item.id} />
+              <input type="hidden" name="sermonId" value={sermonId} />
+              <div className="row">
+                {networks.map(n => (
+                  <label key={n} className="small" style={{ margin: 0, textTransform: 'capitalize', fontWeight: 500 }}>
+                    <input type="checkbox" name="networks" value={n}
+                           defaultChecked={(item.networks ?? []).includes(n)}
+                           style={{ width: 'auto', minHeight: 0, marginRight: 6 }} />
+                    {n}
+                  </label>
+                ))}
+              </div>
+              <div className="row" style={{ marginTop: 8 }}>
+                <input type="datetime-local" name="when"
+                       defaultValue={item.scheduled_for ? localValue(item.scheduled_for) : ''}
+                       style={{ flex: 1, minWidth: 200 }} />
+                <button>{item.scheduled_for ? 'Reschedule' : 'Schedule'}</button>
+              </div>
+            </form>
+            {item.status === 'approved' && (
+              <form action={publishNowAction} style={{ marginTop: 8 }}>
+                <input type="hidden" name="id" value={item.id} />
+                <input type="hidden" name="sermonId" value={sermonId} />
+                <button className="small" style={{ minHeight: 32 }}>Post now</button>
+              </form>
+            )}
+            <p className="small muted" style={{ margin: '6px 0 0' }}>
+              Tick the networks, then pick a time — or post it straight away.
+            </p>
+          </div>
+        ) : (
+          <p className="small muted" style={{ marginTop: 10 }}>
+            <a href="/settings">Connect an account</a> to schedule this, or use the download button.
+          </p>
+        )
       )}
+
+      {item.status === 'posted' && (
+        <p className="small" style={{ color: 'var(--good)' }}>
+          Posted{item.posted_at ? ` ${new Date(item.posted_at).toLocaleString()}` : ''}
+          {(item.post_urls ?? []).length > 0 && ' · '}
+          {(item.post_urls ?? []).map((u, i) => (
+            <a key={u} href={u} target="_blank" rel="noreferrer">{i ? ' · view' : 'view'}</a>
+          ))}
+        </p>
+      )}
+      {item.post_error && <span className="flag">Posting problem: {item.post_error}</span>}
 
       {item.reject_reason && <p className="small" style={{ color: 'var(--bad)' }}>Rejected: {item.reject_reason}</p>}
       {item.scheduled_for && <p className="small muted">Scheduled for {new Date(item.scheduled_for).toLocaleString()} · {(item.networks ?? []).join(', ') || 'no network chosen'}</p>}
@@ -300,7 +341,15 @@ function ItemCard({ item, sermonId }) {
   );
 }
 
+// datetime-local wants a local wall-clock string, not an ISO instant.
+function localValue(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function StatusPill({ item }) {
+  if (item.status === 'posted') return <span className="pill good">posted</span>;
   if (item.status === 'approved') return <span className="pill good">approved</span>;
   if (item.status === 'rejected') return <span className="pill bad">rejected</span>;
   if (item.status === 'scheduled') return <span className="pill sched">scheduled</span>;

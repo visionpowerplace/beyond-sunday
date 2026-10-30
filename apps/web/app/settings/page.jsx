@@ -1,5 +1,5 @@
-import { listChurches, getChurch, logoUploadUrl, logoUrl, ASPECTS, NETWORKS } from '../../lib/church.js';
-import { saveBrandAction } from '../actions.js';
+import { listChurches, getChurch, logoUploadUrl, logoUrl, connectedAccounts, postingConfigured, CONNECTABLE, ASPECTS, NETWORKS } from '../../lib/church.js';
+import { saveBrandAction, connectAccountAction, disconnectAccountAction } from '../actions.js';
 import UploadBox from '../upload-box.jsx';
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +22,8 @@ export default async function Settings({ searchParams }) {
   const upload = await logoUploadUrl(church.id);
   const logo = logoUrl(church);
   const handles = church.handles ?? {};
+  const posting = postingConfigured();
+  const accounts = await connectedAccounts(church);
 
   return (
     <>
@@ -108,19 +110,57 @@ export default async function Settings({ searchParams }) {
         <UploadBox url={upload} accept="image/*" label="Choose a logo" />
       </div>
 
-      <h2>Posting to your accounts</h2>
-      <div className="card">
-        <p style={{ marginTop: 0 }}>
-          Nothing here posts on its own yet, and that is a deliberate gap rather than an oversight.
-        </p>
-        <p className="small muted" style={{ marginBottom: 0 }}>
-          Instagram and Facebook need Meta app review plus business verification; TikTok has a separate
-          content-posting audit that forces every post private until it passes; YouTube caps uploads to
-          roughly six a day across the whole app until a compliance audit lifts it. That is six to twelve
-          weeks of review before one church can publish automatically. Until then, approve an item and use
-          its download button.
-        </p>
-      </div>
+      <h2>Connected accounts</h2>
+      {params?.connected && <div className="card" style={{ borderColor: 'var(--good)' }}>Connected {String(params.connected)}.</div>}
+      {params?.error && <div className="flag">Could not connect: {String(params.error_message || params.error)}</div>}
+
+      {!posting ? (
+        <div className="card">
+          <p style={{ marginTop: 0 }}>Posting is not switched on for this deployment yet.</p>
+          <p className="small muted" style={{ marginBottom: 0 }}>
+            Set <code>ZERNIO_API_KEY</code> on the worker and the web service, and this becomes a list of
+            your accounts with a Connect button for each network. Until then, approve an item and use its
+            download button.
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="small muted" style={{ margin: 0 }}>
+            Approved items post to whichever of these you pick. Connecting opens the network&rsquo;s own
+            sign-in; we never see your password.
+          </p>
+          <div className="card">
+            {accounts.length > 0 && accounts.map(a => (
+              <div className="row" key={a.id} style={{ paddingBottom: 8 }}>
+                <span className="pill good" style={{ textTransform: 'capitalize' }}>{a.platform}</span>
+                <b>{a.displayName || a.username}</b>
+                {a.username && <span className="small muted">{a.username}</span>}
+                <span className="spacer" />
+                <form action={disconnectAccountAction}>
+                  <input type="hidden" name="accountId" value={a.id} />
+                  <input type="hidden" name="churchId" value={church.id} />
+                  <button className="small reject" style={{ minHeight: 30, padding: '3px 9px' }}>Disconnect</button>
+                </form>
+              </div>
+            ))}
+            {!accounts.length && <p className="small muted" style={{ marginTop: 0 }}>Nothing connected yet.</p>}
+
+            <div className="row" style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+              {CONNECTABLE.map(p => (
+                <form action={connectAccountAction} key={p.key}>
+                  <input type="hidden" name="churchId" value={church.id} />
+                  <input type="hidden" name="platform" value={p.key} />
+                  <button className="small" style={{ minHeight: 34 }}>Connect {p.label}</button>
+                </form>
+              ))}
+            </div>
+          </div>
+          <p className="small muted">
+            A clip posts as a video, a carousel as its slides, and a write-up or devotional as text.
+            Instagram and TikTok need a business or creator account; a Facebook Page, not a personal profile.
+          </p>
+        </>
+      )}
 
       <p style={{ marginTop: 24 }}><a href="/">← Back to Sundays</a></p>
     </>

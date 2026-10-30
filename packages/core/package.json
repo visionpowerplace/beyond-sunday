@@ -18,7 +18,9 @@
     "./source-url.js": "./src/source-url.js",
     "./pipeline/cleanup.js": "./src/pipeline/cleanup.js",
     "./brand.js": "./src/brand.js",
-    "./pipeline/carousel.js": "./src/pipeline/carousel.js"
+    "./pipeline/carousel.js": "./src/pipeline/carousel.js",
+    "./providers/zernio.js": "./src/providers/zernio.js",
+    "./pipeline/publish.js": "./src/pipeline/publish.js"
   },
   "dependencies": {
     "postgres": "^3.4.5",

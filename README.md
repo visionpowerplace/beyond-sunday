@@ -105,7 +105,8 @@ Scale the worker to two replicas when one Sunday's renders start queueing behind
 
 Named honestly so nobody is surprised:
 
-- **No posting.** The schedule field is stored; nothing publishes. Auto-posting needs Meta app review plus business verification, TikTok's separate Content Posting audit, and a YouTube compliance audit to lift a quota of roughly six uploads a day. Start those applications before you need them, and put a posting provider in front while you wait.
+- **Posting goes through a provider.** Set `ZERNIO_API_KEY` and churches connect their own Facebook Page, Instagram, YouTube, TikTok, Threads or X in Settings; approved items then schedule or post. Going direct instead would mean Meta app review plus business verification, TikTok's separate content-posting audit, and a YouTube compliance audit to lift a quota of roughly six uploads a day — six to twelve weeks before one church could publish. Worth starting those applications anyway, because the per-profile fee grows with the church count.
+- **Scheduling is the job queue, not a cron.** A publish job's `run_after` is the scheduled time, so a post due while the worker was down goes out when it comes back rather than being skipped. Rescheduling cancels the old job; every publish carries an idempotency key so a retry cannot double-post.
 - **No accounts, roles or billing.** The thin slice is one shared queue.
 - **No face tracking.** The crop is centred. A pastor who walks the stage will go out of frame, and this is the first thing a church will notice.
 - **No music detection.** The model flags a service it believes contained worship, from the transcript alone. That is a warning, not a guarantee — a clip laid over a licensed song still gets muted or claimed.

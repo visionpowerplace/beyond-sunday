@@ -98,3 +98,15 @@ alter table churches add column if not exists logo_token    text;
 -- A clip can exist in several shapes; the row is the 9:16 original and this
 -- holds the others as { "1:1": "path", "4:5": "path" }.
 alter table items add column if not exists variants jsonb default '{}'::jsonb;
+
+-- Posting through a provider: the church's profile there, and what happened
+-- to each item we handed over.
+alter table churches add column if not exists zernio_profile_id text;
+
+alter table items add column if not exists publish_key  text;    -- idempotency, per scheduling
+alter table items add column if not exists post_id      text;
+alter table items add column if not exists post_urls    jsonb default '[]'::jsonb;
+alter table items add column if not exists post_error   text;
+alter table items add column if not exists posted_at    timestamptz;
+
+create index if not exists items_scheduled_idx on items (scheduled_for) where status = 'scheduled';

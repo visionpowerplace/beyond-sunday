@@ -11,6 +11,7 @@ import { runGenerate } from '@bs/core/pipeline/generate.js';
 import { runRenderClip } from '@bs/core/pipeline/render.js';
 import { diskFree, reclaimSpace, human, runDeleteSermon } from '@bs/core/pipeline/cleanup.js';
 import { runRenderCarousel } from '@bs/core/pipeline/carousel.js';
+import { runPublish } from '@bs/core/pipeline/publish.js';
 
 const WORKER_ID = `${process.env.RAILWAY_REPLICA_ID ?? 'local'}-${randomUUID().slice(0, 8)}`;
 const IDLE_MS = 3000;
@@ -22,6 +23,7 @@ const HANDLERS = {
   render_clip: runRenderClip,
   delete_sermon: runDeleteSermon,
   render_carousel: runRenderCarousel,
+  publish: runPublish,
 };
 
 // What the church sees while each job runs. Keeps the page honest on a retry.

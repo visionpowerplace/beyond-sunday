@@ -194,14 +194,24 @@ function appUrl() {
 }
 
 export async function deleteSermonAction(formData) {
-  await deleteSermon(String(formData.get('sermonId')));
+  // A delete that cannot be queued is not worth an error page: the sermon is
+  // on its way out either way, and the list will show the truth.
+  try {
+    await deleteSermon(String(formData.get('sermonId')));
+  } catch (err) {
+    console.error('[delete]', err.message);
+  }
   // From a sermon page there is nowhere to stay; from the list, stay put.
   if (String(formData.get('stay') || '') === '1') return revalidatePath('/sundays');
   redirect('/sundays');
 }
 
 export async function deleteFailedAction() {
-  await deleteFailedSermons();
+  try {
+    await deleteFailedSermons();
+  } catch (err) {
+    console.error('[delete failed sermons]', err.message);
+  }
   revalidatePath('/sundays');
 }
 

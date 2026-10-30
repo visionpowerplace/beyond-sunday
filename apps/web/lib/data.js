@@ -131,17 +131,41 @@ export async function presentKinds(sermonId) {
   return new Set(rows.map(r => r.kind));
 }
 
+/**
+ * The files live on the worker's volume, so the worker does the deleting and
+ * the row goes with them.
+ *
+ * Pressing Delete twice used to race: the worker removed the sermon, and the
+ * second press then tried to queue a job against a row that no longer existed,
+ * which came back as a foreign key violation and a server error page. Deleting
+ * something already gone is not an error — it is the outcome the person asked
+ * for — so it returns quietly.
+ */
 export async function deleteSermon(sermonId) {
-  // The files live on the worker's volume, so the worker does the deleting.
-  await sql`update sermons set status = 'deleting', updated_at = now() where id = ${sermonId}`;
-  await enqueue({ type: 'delete_sermon', sermonId });
+  const [marked] = await sql`
+    update sermons set status = 'deleting', updated_at = now()
+    where id = ${sermonId} and status <> 'deleting'
+    returning id`;
+  if (!marked) return false;   // already gone, or already being deleted
+
+  try {
+    await enqueue({ type: 'delete_sermon', sermonId });
+    return true;
+  } catch (err) {
+    // 23503: the sermon was deleted between the update and the insert.
+    if (err?.code === '23503') return false;
+    throw err;
+  }
 }
 
 /** Clear out everything that failed, in one go. */
 export async function deleteFailedSermons() {
   const rows = await sql`select id from sermons where status = 'failed'`;
-  for (const r of rows) await deleteSermon(r.id);
-  return rows.length;
+  let queued = 0;
+  for (const r of rows) {
+    if (await deleteSermon(r.id)) queued++;
+  }
+  return queued;
 }
 
 /** Re-cut one clip in another shape, from the same source. */

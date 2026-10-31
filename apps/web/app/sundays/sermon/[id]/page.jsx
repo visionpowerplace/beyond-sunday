@@ -241,9 +241,16 @@ function ItemCard({ item, sermonId, networks }) {
               </a>
             ))}
           </div>
-          <p className="small muted" style={{ margin: '6px 0 0' }}>
-            Tap a slide to open it full size, then save it.
-          </p>
+          {body.photoProblem ? (
+            <p className="flag" style={{ marginTop: 8 }}>
+              These slides came out on drawn backgrounds, not photographs.{' '}
+              {body.photoProblem} Fix that and generate the carousel again.
+            </p>
+          ) : (
+            <p className="small muted" style={{ margin: '6px 0 0' }}>
+              Tap a slide to open it full size, then save it.
+            </p>
+          )}
         </>
       ) : Array.isArray(body.slides) && body.slides.length > 0 && (
         <>

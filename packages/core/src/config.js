@@ -50,7 +50,11 @@ export const config = {
   // card; 'openrouter' is better and costs per image; 'none' keeps the drawn
   // backgrounds.
   image: {
-    provider: env.IMAGE_PROVIDER || 'pollinations',
+    // An OpenRouter key means real photographs are available, so prefer them.
+    // Pollinations is only a default where nothing else is configured, and it
+    // now needs an account of its own.
+    provider: env.IMAGE_PROVIDER || (env.OPENROUTER_API_KEY ? 'openrouter' : 'pollinations'),
+    allowPollinations: env.IMAGE_ALLOW_POLLINATIONS === '1',
     model: env.IMAGE_MODEL || '',
     timeoutMs: Number(env.IMAGE_TIMEOUT_MS || 120_000),
     localPath: env.IMAGE_LOCAL_PATH || '',

@@ -12,10 +12,17 @@ import { config } from '../config.js';
  * that cannot be made is worse than a slide without a photograph.
  */
 
-export async function generateImage(prompt, { width = 1080, height = 1350, seed, provider } = {}) {
+export async function generateImage(prompt, { width = 1080, height = 1350, seed, provider, onProblem } = {}) {
+  const note = (msg) => { console.error(`[image] ${msg}`); onProblem?.(msg); };
   if (!prompt?.trim()) return null;
   // A church can pick its own; otherwise the deployment's default.
   const chosen = provider || config.image.provider;
+  if (chosen === 'pollinations' && !config.image.allowPollinations) {
+    // Their free keyless tier now answers 402, which silently cost every
+    // slide its photograph. Fail loudly rather than quietly drawing shapes.
+    note('Pollinations no longer serves free keyless requests. Set IMAGE_PROVIDER=openrouter.');
+    return null;
+  }
   try {
     switch (chosen) {
       case 'pollinations': return await pollinations(prompt, { width, height, seed });
@@ -25,7 +32,7 @@ export async function generateImage(prompt, { width = 1080, height = 1350, seed,
       default:             return null;
     }
   } catch (err) {
-    console.error(`[image] ${chosen} failed: ${err.message}`);
+    note(`${chosen} could not make the photograph — ${err.message}`);
     return null;
   }
 }
@@ -59,9 +66,20 @@ async function pollinations(prompt, { width, height, seed }) {
   return buf;
 }
 
+/**
+ * OpenRouter's image endpoint is /api/v1/images — not the OpenAI-shaped
+ * /images/generations, which answers 404 — and it takes an aspect ratio
+ * rather than a pixel size. The slide is 1080x1350, so 4:5.
+ */
+function aspectRatio(width, height) {
+  const g = (a, b) => (b ? g(b, a % b) : a);
+  const d = g(width, height) || 1;
+  return `${Math.round(width / d)}:${Math.round(height / d)}`;
+}
+
 async function openrouterImage(prompt, { width, height }) {
   if (!config.llm.openrouterKey) throw new Error('OPENROUTER_API_KEY is not set');
-  const res = await fetch('https://openrouter.ai/api/v1/images/generations', {
+  const res = await fetch('https://openrouter.ai/api/v1/images', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${config.llm.openrouterKey}`,
@@ -70,10 +88,12 @@ async function openrouterImage(prompt, { width, height }) {
     body: JSON.stringify({
       model: config.image.model || 'google/gemini-2.5-flash-image',
       prompt,
-      size: `${width}x${height}`,
+      aspect_ratio: aspectRatio(width, height),
     }),
     signal: AbortSignal.timeout(config.image.timeoutMs),
   });
+  // The body can carry a key in an echoed header, so only the status and a
+  // short, quoted snippet go to the log — never the request we sent.
   if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
 
@@ -94,7 +114,11 @@ async function openrouterImage(prompt, { width, height }) {
  * and keep it out of the uncanny valley a church would never post.
  */
 export function photoPrompt(scene) {
-  return `${scene}. Documentary photograph, natural available light, shallow depth of field, `
-    + `warm and hopeful, muted natural colour, photorealistic, high detail. `
-    + `No text, no words, no lettering, no logos, no watermark, no collage, no borders.`;
+  return `A photograph: ${scene}. `
+    + `Shot on a full-frame camera with a 35mm lens at f/2, golden-hour daylight, `
+    + `soft natural shadows, shallow depth of field, fine grain, realistic skin and `
+    + `fabric texture, muted warm colour grade, unposed and documentary. `
+    + `Leave the upper third calm and relatively empty so a headline can sit over it. `
+    + `Photorealistic, not an illustration, not a painting, not a 3D render, not a collage. `
+    + `No text, no words, no lettering, no logos, no watermark, no borders, no frame.`;
 }

@@ -37,11 +37,13 @@ export async function runRenderCarousel(job) {
   const logo = await loadLogo(brand.logoPath);
   const paths = [];
   let withPhoto = 0;
+  let problem = null;
 
   for (const [i, slide] of slides.entries()) {
     // Photographs are made one at a time rather than in parallel: the free
     // generator rate-limits a burst and returns nothing for half the deck.
-    const photo = await backdropFor(slide, i, item.id, church.image_provider);
+    const photo = await backdropFor(slide, i, item.id, church.image_provider,
+      (msg) => { if (!problem) problem = msg; });
     if (photo) withPhoto++;
 
     const out = path.join(dir, `${String(i + 1).padStart(2, '0')}.png`);
@@ -52,17 +54,24 @@ export async function runRenderCarousel(job) {
   await sql`
     update items set body = body || ${sql.json({ images: paths })}, updated_at = now()
     where id = ${item.id}`;
-  return { slides: paths.length, photos: withPhoto };
+  // A deck of drawn shapes where photographs were meant to be is a failure
+  // the church should hear about, not discover by looking at it.
+  if (problem) {
+    await sql`
+      update items set body = body || ${sql.json({ photoProblem: problem })}, updated_at = now()
+      where id = ${item.id}`;
+  }
+  return { slides: paths.length, photos: withPhoto, problem };
 }
 
 /** The photograph, resized to fill the frame. Null when there isn't one. */
-async function backdropFor(slide, index, itemId, provider) {
+async function backdropFor(slide, index, itemId, provider, onProblem) {
   const scene = slide.image_prompt || slide.scene;
   if (!scene) return null;
 
   // A stable seed so re-rendering the same slide does not reshuffle the deck.
   const seed = [...`${itemId}${index}`].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 1e6, 7);
-  const bytes = await generateImage(photoPrompt(scene), { width: W, height: H, seed, provider });
+  const bytes = await generateImage(photoPrompt(scene), { width: W, height: H, seed, provider, onProblem });
   if (!bytes) return null;
 
   try {
@@ -73,7 +82,7 @@ async function backdropFor(slide, index, itemId, provider) {
   }
 }
 
-async function compose({ slide, index, total, title, brand, logo, photo, out }) {
+export async function compose({ slide, index, total, title, brand, logo, photo, out }) {
   const layers = [];
 
   if (photo) {
@@ -134,9 +143,9 @@ function typeLayer({ slide, index, total, title, brand, photo }) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <linearGradient id="wash" x1="0" y1="0" x2="0.25" y2="1">
-      <stop offset="0%" stop-color="${wash}" stop-opacity="${onPhoto ? 0.97 : 0.9}"/>
-      <stop offset="${Math.round((washBottom / H) * 70)}%" stop-color="${wash}" stop-opacity="${onPhoto ? 0.9 : 0.8}"/>
+    <linearGradient id="wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${wash}" stop-opacity="1"/>
+      <stop offset="${Math.round((washBottom / H) * 88)}%" stop-color="${wash}" stop-opacity="1"/>
       <stop offset="100%" stop-color="${wash}" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="foot" x1="0" y1="1" x2="0" y2="0">
@@ -145,7 +154,7 @@ function typeLayer({ slide, index, total, title, brand, photo }) {
     </linearGradient>
   </defs>
 
-  <rect x="0" y="0" width="${W}" height="${washBottom}" fill="url(#wash)"/>
+  <rect x="0" y="0" width="${W}" height="${Math.round(washBottom * 1.22)}" fill="url(#wash)"/>
   <rect x="0" y="${H - 240}" width="${W}" height="240" fill="url(#foot)"/>
 
   <text x="${PAD}" y="${top}" font-family="${BODY}" font-size="25" font-weight="700"

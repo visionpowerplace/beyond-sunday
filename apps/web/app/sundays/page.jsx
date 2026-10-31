@@ -48,7 +48,7 @@ export default async function Sundays({ searchParams }) {
       )}
 
       <form action={newSermonAction} className="card">
-        <NewSermonForm sources={SUPPORTED_SOURCES} youtubeConnected={Boolean(church?.google_refresh_token)}>
+        <NewSermonForm sources={SUPPORTED_SOURCES} youtubeConnected={Boolean(church?.google_refresh_token)} savedFeed={church?.feed_url ?? null}>
           <label htmlFor="title">Sermon title</label>
           <input id="title" name="title" required placeholder="A Power In Silence" />
           <div className="row">

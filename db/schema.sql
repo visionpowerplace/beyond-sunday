@@ -164,3 +164,6 @@ alter table sermons add column if not exists charged boolean default false;
 alter table churches add column if not exists google_refresh_token text;
 alter table churches add column if not exists google_email        text;
 alter table churches add column if not exists google_connected_at timestamptz;
+
+-- The church's sermon feed, so every Sunday after the first is one click.
+alter table churches add column if not exists feed_url text;

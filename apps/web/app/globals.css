@@ -146,3 +146,13 @@ blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--gol
   width: 190px; flex: 0 0 auto; border-radius: 10px; border: 1px solid var(--line);
   scroll-snap-align: start; background: var(--paper);
 }
+
+/* Episodes from a sermon feed, picked like a list of radio buttons. */
+.feed-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  width: 100%; text-align: left; margin-bottom: 6px; padding: 10px 12px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+  font-weight: 500;
+}
+.feed-item:hover { border-color: var(--muted); }
+.feed-item.on { border-color: var(--gold); background: var(--card); box-shadow: inset 3px 0 0 var(--gold); }

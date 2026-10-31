@@ -27,7 +27,8 @@
     "./accounts.js": "./src/accounts.js",
     "./youtube-meta.js": "./src/youtube-meta.js",
     "./captions.js": "./src/captions.js",
-    "./providers/youtube.js": "./src/providers/youtube.js"
+    "./providers/youtube.js": "./src/providers/youtube.js",
+    "./feed.js": "./src/feed.js"
   },
   "dependencies": {
     "postgres": "^3.4.5",

@@ -11,7 +11,7 @@ import { useState, useRef } from 'react';
  * the channel, which is most of the typing, plus a direct link into YouTube
  * Studio where the owner can download their own original.
  */
-export default function NewSermonForm({ sources, youtubeConnected, children }) {
+export default function NewSermonForm({ sources, youtubeConnected, savedFeed, children }) {
   const [mode, setMode] = useState('upload');
   const [yt, setYt] = useState(null);
   const [looking, setLooking] = useState(false);
@@ -19,8 +19,17 @@ export default function NewSermonForm({ sources, youtubeConnected, children }) {
   const [pulled, setPulled] = useState(null);
   const [pullError, setPullError] = useState(null);
   const captionsRef = useRef(null);
-  const titleRef = useRef(null);
-  const preacherRef = useRef(null);
+  const [feed, setFeed] = useState(null);
+  const [feedError, setFeedError] = useState(null);
+  const [loadingFeed, setLoadingFeed] = useState(false);
+  const [chosen, setChosen] = useState(null);
+  const urlRef = useRef(null);
+  // The title and preacher inputs are passed in as children, so a ref never
+  // reaches them. They have ids, so look them up when there is something to fill.
+  const fill = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && !el.value && value) el.value = value;
+  };
 
   async function inspect(value) {
     const url = value.trim();
@@ -34,8 +43,8 @@ export default function NewSermonForm({ sources, youtubeConnected, children }) {
       if (!meta?.id) return;
       setYt(meta);
       // Only fill what the person has not typed themselves.
-      if (meta.title && titleRef.current && !titleRef.current.value) titleRef.current.value = meta.title;
-      if (meta.channel && preacherRef.current && !preacherRef.current.value) preacherRef.current.value = meta.channel;
+      fill('title', meta.title);
+      fill('preacher', meta.channel);
     } catch { /* the form still works without it */ }
     finally { setLooking(false); }
   }
@@ -60,6 +69,30 @@ export default function NewSermonForm({ sources, youtubeConnected, children }) {
     }
   }
 
+  /** Read the church's sermon feed and list what is in it. */
+  async function loadFeed(url) {
+    setLoadingFeed(true);
+    setFeedError(null);
+    try {
+      const res = await fetch(`/api/feed${url ? `?url=${encodeURIComponent(url)}` : ''}`);
+      const data = await res.json();
+      if (!data.ok) { setFeedError(data.reason); setFeed(null); return; }
+      setFeed(data);
+    } catch {
+      setFeedError('Could not reach that feed just then. Try again.');
+    } finally {
+      setLoadingFeed(false);
+    }
+  }
+
+  /** Picking an episode fills the form in and points the link at the file. */
+  function choose(ep) {
+    setChosen(ep);
+    if (urlRef.current) urlRef.current.value = ep.url;
+    fill('title', ep.title);
+    fill('preacher', ep.author);
+  }
+
   return (
     <>
       <div className="row" style={{ gap: 16 }}>
@@ -76,6 +109,12 @@ export default function NewSermonForm({ sources, youtubeConnected, children }) {
           Use a link
         </label>
         <label className="small" style={{ margin: 0 }}>
+          <input type="radio" name="mode" value="link" checked={mode === 'feed'}
+                 onChange={() => { setMode('feed'); if (savedFeed && !feed) loadFeed(savedFeed); }}
+                 style={{ width: 'auto', minHeight: 0, marginRight: 6 }} />
+          From your sermon feed
+        </label>
+        <label className="small" style={{ margin: 0 }}>
           <input type="radio" name="mode" value="captions" checked={mode === 'captions'}
                  onChange={() => setMode('captions')}
                  style={{ width: 'auto', minHeight: 0, marginRight: 6 }} />
@@ -88,13 +127,54 @@ export default function NewSermonForm({ sources, youtubeConnected, children }) {
           ? 'Any video or audio file, any length. It goes straight to the processing server.'
           : mode === 'captions'
             ? 'No video needed. Everything except the clips, in under a minute, and it costs nothing to transcribe.'
-            : `Links work for ${sources.join(', ')}.`}
+            : mode === 'feed'
+              ? 'Most church media platforms publish one. Paste it once and every Sunday after this is a click.'
+              : `Links work for ${sources.join(', ')}.`}
       </p>
 
-      <label htmlFor="sourceUrl">
+      {mode === 'feed' && (
+        <>
+          <label htmlFor="feedUrl">Your sermon feed</label>
+          <div className="row" style={{ flexWrap: 'nowrap' }}>
+            <input id="feedUrl" defaultValue={savedFeed ?? ''} placeholder="https://…/feed.xml or your podcast RSS"
+                   style={{ flex: 1 }} />
+            <button type="button" disabled={loadingFeed}
+                    onClick={() => loadFeed(document.getElementById('feedUrl').value)}>
+              {loadingFeed ? <span className="spinner" /> : feed ? 'Refresh' : 'Load'}
+            </button>
+          </div>
+          <p className="small muted" style={{ margin: '6px 0 0' }}>
+            Look for &ldquo;RSS&rdquo;, &ldquo;Podcast&rdquo; or &ldquo;Subscribe&rdquo; on your media platform.
+            Subsplash, Church Online Platform, Castr, Buzzsprout and most others publish one.
+          </p>
+          {feedError && <span className="flag">{feedError}</span>}
+
+          {feed && (
+            <div style={{ marginTop: 10 }}>
+              <p className="small muted" style={{ margin: '0 0 6px' }}>{feed.title}</p>
+              {feed.episodes.map(ep => (
+                <button type="button" key={ep.url}
+                        onClick={() => choose(ep)}
+                        className={`feed-item${chosen?.url === ep.url ? ' on' : ''}`}>
+                  <b>{ep.title}</b>
+                  <span className="small muted">
+                    {ep.published ? new Date(ep.published).toLocaleDateString() : ''}
+                    {ep.durationS ? ` · ${Math.round(ep.durationS / 60)} min` : ''}
+                    {` · ${ep.kind}`}
+                    {ep.kind === 'audio' ? ' — no clips from audio' : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <label htmlFor="sourceUrl" style={mode === 'feed' ? { position: 'absolute', left: -9999 } : undefined}>
         {mode === 'upload' ? 'YouTube link (optional — fills in the details below)' : 'Link to the video file'}
       </label>
-      <input id="sourceUrl" name="sourceUrl" placeholder="https://..."
+      <input id="sourceUrl" name="sourceUrl" placeholder="https://..." ref={urlRef}
+             style={mode === 'feed' ? { position: 'absolute', left: -9999 } : undefined}
              onBlur={e => inspect(e.target.value)}
              onPaste={e => setTimeout(() => inspect(e.target.value), 0)} />
 

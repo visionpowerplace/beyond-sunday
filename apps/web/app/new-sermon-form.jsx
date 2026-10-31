@@ -85,12 +85,21 @@ export default function NewSermonForm({ sources, youtubeConnected, savedFeed, ch
     }
   }
 
-  /** Picking an episode fills the form in and points the link at the file. */
+  /**
+   * Picking an episode fills the form in. A podcast entry points at a real
+   * file. A YouTube entry does not — a channel feed carries a player url, not
+   * a download — so it points at the watch page and offers the caption pull.
+   */
   function choose(ep) {
     setChosen(ep);
     if (urlRef.current) urlRef.current.value = ep.url;
     fill('title', ep.title);
     fill('preacher', ep.author);
+    setPulled(null);
+    setPullError(null);
+    setYt(ep.kind === 'youtube' && ep.videoId
+      ? { id: ep.videoId, title: ep.title, channel: ep.author }
+      : null);
   }
 
   return (
@@ -136,22 +145,37 @@ export default function NewSermonForm({ sources, youtubeConnected, savedFeed, ch
         <>
           <label htmlFor="feedUrl">Your sermon feed</label>
           <div className="row" style={{ flexWrap: 'nowrap' }}>
-            <input id="feedUrl" defaultValue={savedFeed ?? ''} placeholder="https://…/feed.xml or your podcast RSS"
+            <input id="feedUrl" defaultValue={savedFeed ?? ''}
+                   placeholder="your podcast RSS, or youtube.com/channel/UC…"
                    style={{ flex: 1 }} />
             <button type="button" disabled={loadingFeed}
                     onClick={() => loadFeed(document.getElementById('feedUrl').value)}>
               {loadingFeed ? <span className="spinner" /> : feed ? 'Refresh' : 'Load'}
             </button>
           </div>
+
+          {youtubeConnected && (
+            <button type="button" disabled={loadingFeed}
+                    style={{ marginTop: 8 }}
+                    onClick={() => { const el = document.getElementById('feedUrl'); if (el) el.value = ''; loadFeed(''); }}>
+              {loadingFeed ? <><span className="spinner" /> Reading…</> : 'Read my YouTube channel'}
+            </button>
+          )}
+
           <p className="small muted" style={{ margin: '6px 0 0' }}>
-            Look for &ldquo;RSS&rdquo;, &ldquo;Podcast&rdquo; or &ldquo;Subscribe&rdquo; on your media platform.
-            Subsplash, Church Online Platform, Castr, Buzzsprout and most others publish one.
+            A podcast feed carries the audio itself. A YouTube channel address lists
+            your Sundays and their captions, but YouTube serves no file, so those give
+            everything except the clips. Look for &ldquo;RSS&rdquo;, &ldquo;Podcast&rdquo;
+            or &ldquo;Subscribe&rdquo; on Subsplash, Church Online Platform, Castr,
+            Buzzsprout and most others.
           </p>
           {feedError && <span className="flag">{feedError}</span>}
 
           {feed && (
             <div style={{ marginTop: 10 }}>
-              <p className="small muted" style={{ margin: '0 0 6px' }}>{feed.title}</p>
+              <p className="small muted" style={{ margin: '0 0 6px' }}>
+                {feed.channel ? `${feed.channel.title} — your connected channel` : feed.title}
+              </p>
               {feed.episodes.map(ep => (
                 <button type="button" key={ep.url}
                         onClick={() => choose(ep)}
@@ -160,8 +184,10 @@ export default function NewSermonForm({ sources, youtubeConnected, savedFeed, ch
                   <span className="small muted">
                     {ep.published ? new Date(ep.published).toLocaleDateString() : ''}
                     {ep.durationS ? ` · ${Math.round(ep.durationS / 60)} min` : ''}
-                    {` · ${ep.kind}`}
-                    {ep.kind === 'audio' ? ' — no clips from audio' : ''}
+                    {ep.durationS ? '' : ''}
+                    {ep.kind === 'youtube'
+                      ? ' · YouTube — captions only, no clips'
+                      : ep.kind === 'audio' ? ' · audio — no clips from audio' : ' · video'}
                   </span>
                 </button>
               ))}

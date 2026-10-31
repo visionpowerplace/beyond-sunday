@@ -13,7 +13,74 @@
 
 const MEDIA = /^(audio|video)\//i;
 
-export async function fetchFeed(url, { limit = 20 } = {}) {
+/**
+ * YouTube publishes a real, public channel feed. It carries the video id,
+ * title, date and thumbnail for recent uploads — but its media:content is a
+ * player URL, not a file, so it lists a church's sermons without handing over
+ * any of them. That still turns "paste a link every week" into "pick last
+ * Sunday", and with the channel connected the captions follow from the id.
+ */
+const YT_FEED = 'https://www.youtube.com/feeds/videos.xml';
+
+/** Accepts a feed URL, a channel URL, or a bare channel id. */
+export function youtubeFeedUrl(input) {
+  const raw = String(input ?? '').trim();
+  if (!raw) return null;
+
+  if (raw.startsWith(YT_FEED)) return raw;
+  if (/^UC[\w-]{20,}$/.test(raw)) return `${YT_FEED}?channel_id=${raw}`;
+
+  try {
+    const u = new URL(raw);
+    if (!/(^|\.)youtube\.com$/.test(u.hostname.replace(/^www\./, ''))) return null;
+    if (u.pathname === '/feeds/videos.xml') return raw;
+
+    const channel = u.pathname.match(/^\/channel\/(UC[\w-]{20,})/)?.[1];
+    if (channel) return `${YT_FEED}?channel_id=${channel}`;
+
+    // The legacy ?user= feed is retired — YouTube answers 404 — so a
+    // /user/ or /@handle address carries nothing we can turn into a feed.
+    // The channel id is the only key that still works.
+    if (/^\/(@|user\/|c\/)/.test(u.pathname)) return { needsChannelId: true };
+  } catch { /* not a url */ }
+  return null;
+}
+
+export function parseYouTubeFeed(xml, limit) {
+  const title = text(xml.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]) || 'YouTube channel';
+  const entries = [...xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi)].map(m => m[0]);
+
+  const episodes = entries.map(entry => {
+    const videoId = text(entry.match(/<yt:videoId>([\s\S]*?)<\/yt:videoId>/i)?.[1]);
+    if (!videoId) return null;
+    return {
+      title: text(entry.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]) || 'Untitled',
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      videoId,
+      kind: 'youtube',
+      thumbnail: attr(entry.match(/<media:thumbnail\b[^>]*>/i)?.[0] ?? '', 'url'),
+      published: date(entry),
+      durationS: null,
+      author: text(entry.match(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>/i)?.[1]) || null,
+    };
+  }).filter(Boolean);
+
+  if (!episodes.length) throw new Error('That channel feed has no videos in it yet.');
+  return { title, episodes: episodes.slice(0, limit), youtube: true };
+}
+
+/** Picks the right parser by what the document actually contains. */
+export function parseAnyFeed(xml, limit = 20) {
+  return /<yt:videoId>/i.test(xml) ? parseYouTubeFeed(xml, limit) : parseFeed(xml, limit);
+}
+
+export async function fetchFeed(input, { limit = 20 } = {}) {
+  const yt = youtubeFeedUrl(input);
+  if (yt?.needsChannelId) {
+    throw new Error('A @handle does not carry the channel id. Open your channel, copy the address that starts with youtube.com/channel/UC…, and paste that.');
+  }
+  const url = typeof yt === 'string' ? yt : input;
+
   const res = await fetch(url, {
     headers: { 'user-agent': 'BeyondSunday/1.0 (+sermon media)', accept: 'application/rss+xml, application/xml, text/xml, */*' },
     redirect: 'follow',
@@ -25,7 +92,7 @@ export async function fetchFeed(url, { limit = 20 } = {}) {
   if (!/<(rss|feed|channel)\b/i.test(body)) {
     throw new Error('That address is not a feed. Look for an RSS or podcast link on your media platform.');
   }
-  return parseFeed(body, limit);
+  return parseAnyFeed(body, limit);
 }
 
 export function parseFeed(xml, limit = 20) {

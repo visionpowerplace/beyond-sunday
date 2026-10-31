@@ -153,3 +153,32 @@ function emailFromIdToken(idToken) {
     return null;
   }
 }
+
+/**
+ * The channel behind a connected account. channels.list with mine=true is a
+ * read on the signed-in user's own channel, so a church that has connected
+ * for captions never has to find and paste a channel id.
+ */
+export async function myChannel(refreshToken) {
+  const token = await accessToken(refreshToken);
+  const res = await fetch(`${API}/channels?part=snippet,contentDetails&mine=true`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error?.message || `google ${res.status}`);
+    err.needsReconnect = res.status === 401;
+    throw err;
+  }
+  const channel = data.items?.[0];
+  if (!channel) {
+    throw new Error('That Google account has no YouTube channel on it. Connect the account that owns the church channel.');
+  }
+  return {
+    id: channel.id,
+    title: channel.snippet?.title || 'Your channel',
+    uploads: channel.contentDetails?.relatedPlaylists?.uploads || null,
+    feedUrl: `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`,
+  };
+}

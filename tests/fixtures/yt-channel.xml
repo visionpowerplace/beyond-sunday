@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns:media="http://search.yahoo.com/mrss/"
+      xmlns="http://www.w3.org/2005/Atom">
+ <link rel="alternate" href="https://www.youtube.com/channel/UCchurchexamplechannel00"/>
+ <id>yt:channel:UCchurchexamplechannel00</id>
+ <yt:channelId>UCchurchexamplechannel00</yt:channelId>
+ <title>Grace Chapel</title>
+ <published>2016-02-01T00:00:00+00:00</published>
+ <entry>
+  <id>yt:video:dQw4w9WgXcQ</id>
+  <yt:videoId>dQw4w9WgXcQ</yt:videoId>
+  <yt:channelId>UCchurchexamplechannel00</yt:channelId>
+  <title>Sunday Service — The Weight of Mercy</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"/>
+  <author><name>Grace Chapel</name><uri>https://www.youtube.com/channel/UCchurchexamplechannel00</uri></author>
+  <published>2026-10-26T16:12:00+00:00</published>
+  <updated>2026-10-26T20:01:11+00:00</updated>
+  <media:group>
+   <media:title>Sunday Service — The Weight of Mercy</media:title>
+   <media:content url="https://www.youtube.com/v/dQw4w9WgXcQ?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i4.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Pastor walks through Micah 6.</media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:abc12345678</id>
+  <yt:videoId>abc12345678</yt:videoId>
+  <title>Midweek Prayer &amp; Communion</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=abc12345678"/>
+  <author><name>Grace Chapel</name></author>
+  <published>2026-10-22T23:00:00+00:00</published>
+  <media:group>
+   <media:thumbnail url="https://i4.ytimg.com/vi/abc12345678/hqdefault.jpg" width="480" height="360"/>
+  </media:group>
+ </entry>
+</feed>

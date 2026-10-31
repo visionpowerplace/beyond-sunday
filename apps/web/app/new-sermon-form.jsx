@@ -146,7 +146,7 @@ export default function NewSermonForm({ sources, youtubeConnected, savedFeed, ch
           <label htmlFor="feedUrl">Your sermon feed</label>
           <div className="row" style={{ flexWrap: 'nowrap' }}>
             <input id="feedUrl" defaultValue={savedFeed ?? ''}
-                   placeholder="your podcast RSS, or youtube.com/channel/UC…"
+                   placeholder="your podcast RSS, or a YouTube channel or playlist address"
                    style={{ flex: 1 }} />
             <button type="button" disabled={loadingFeed}
                     onClick={() => loadFeed(document.getElementById('feedUrl').value)}>
@@ -163,11 +163,13 @@ export default function NewSermonForm({ sources, youtubeConnected, savedFeed, ch
           )}
 
           <p className="small muted" style={{ margin: '6px 0 0' }}>
-            A podcast feed carries the audio itself. A YouTube channel address lists
-            your Sundays and their captions, but YouTube serves no file, so those give
-            everything except the clips. Look for &ldquo;RSS&rdquo;, &ldquo;Podcast&rdquo;
-            or &ldquo;Subscribe&rdquo; on Subsplash, Church Online Platform, Castr,
-            Buzzsprout and most others.
+            A podcast feed carries the audio itself, so it gives clips too. A YouTube
+            channel or playlist address lists your Sundays and their captions, but
+            YouTube serves no file, so those give everything except the clips. A
+            Sermons playlist usually beats the channel — the channel mixes in
+            announcements and worship sets. Look for &ldquo;RSS&rdquo;,
+            &ldquo;Podcast&rdquo; or &ldquo;Subscribe&rdquo; on Subsplash, Church Online
+            Platform, Castr, Buzzsprout and most others.
           </p>
           {feedError && <span className="flag">{feedError}</span>}
 

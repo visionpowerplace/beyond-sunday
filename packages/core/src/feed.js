@@ -29,6 +29,7 @@ export function youtubeFeedUrl(input) {
 
   if (raw.startsWith(YT_FEED)) return raw;
   if (/^UC[\w-]{20,}$/.test(raw)) return `${YT_FEED}?channel_id=${raw}`;
+  if (/^PL[\w-]{10,}$/.test(raw)) return `${YT_FEED}?playlist_id=${raw}`;
 
   try {
     const u = new URL(raw);
@@ -37,6 +38,12 @@ export function youtubeFeedUrl(input) {
 
     const channel = u.pathname.match(/^\/channel\/(UC[\w-]{20,})/)?.[1];
     if (channel) return `${YT_FEED}?channel_id=${channel}`;
+
+    // A playlist feed is usually the better one for a church: the Sermons
+    // playlist is the preaching, where all-uploads mixes in announcements,
+    // worship sets and kids' content.
+    const list = u.searchParams.get('list');
+    if (list && /^PL[\w-]{10,}$/.test(list)) return `${YT_FEED}?playlist_id=${list}`;
 
     // The legacy ?user= feed is retired — YouTube answers 404 — so a
     // /user/ or /@handle address carries nothing we can turn into a feed.

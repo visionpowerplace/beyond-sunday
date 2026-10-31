@@ -47,3 +47,13 @@ assert.ok(!pod.youtube, 'podcast feed not flagged as youtube');
 assert.equal(pod.episodes[0].url, 'https://ex.org/a.mp3');
 
 console.log('feed-youtube: ok —', got.episodes.length, 'videos, no media file claimed');
+
+// A Sermons playlist, which is usually a better feed for a church than
+// all-uploads: bare id, and the watch/playlist address people actually copy.
+assert.equal(youtubeFeedUrl('PLabcdefghijkl'),
+  'https://www.youtube.com/feeds/videos.xml?playlist_id=PLabcdefghijkl');
+assert.equal(youtubeFeedUrl('https://www.youtube.com/playlist?list=PLabcdefghijkl'),
+  'https://www.youtube.com/feeds/videos.xml?playlist_id=PLabcdefghijkl');
+assert.equal(youtubeFeedUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabcdefghijkl'),
+  'https://www.youtube.com/feeds/videos.xml?playlist_id=PLabcdefghijkl');
+console.log('feed-youtube: playlist feeds ok');

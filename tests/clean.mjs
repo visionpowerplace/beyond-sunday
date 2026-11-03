@@ -23,12 +23,34 @@ assert.equal(dropPreacher('Pastor Beckley reminds us that waiting changes you.',
   'Waiting changes you.');
 assert.equal(dropPreacher('The pastor explains that delay is preparation.', 'Benjamin Beckley'),
   'Delay is preparation.');
+// The name and the verb it governs both go, rather than leaving the sentence
+// hanging on "argues". The result is clipped, but this is a backstop for a
+// leak the prompt should have prevented, not the normal path.
 assert.equal(dropPreacher('In this message, Benjamin Beckley argues for patience.', 'Benjamin Beckley'),
-  'In this message, argues for patience.');
+  'In this message, for patience.');
 assert.ok(!dropPreacher('Beckley says the roots matter most.', 'Benjamin Beckley').includes('Beckley'));
 
-// An honorific with no name attached still goes.
+// An honorific with a name still goes.
 assert.ok(!/pastor/i.test(dropPreacher('Pastor Benjamin walks through Micah 6.', 'Benjamin Beckley')));
+assert.equal(dropPreacher('Beckley says the roots matter most.', 'Benjamin Beckley'),
+  'The roots matter most.');
+
+// SCRIPTURE IS NOT THE PREACHER. An earlier version of this stripped
+// honorifics like "Apostle" and "Prophet", and matched "dr" inside "dream",
+// so "a dream in his pocket" came out as "a eam in his pocket". Every line
+// below is a thing that was actually broken.
+const P = 'Benjamin Beckley';
+for (const line of [
+  'Apostle Paul wrote this from a prison cell.',
+  'The prophet Isaiah said they that wait shall renew their strength.',
+  'Elder John wrote to the church.',
+  'Joseph sat in a prison with a dream in his pocket.',
+  'He had a dream, and he drove on through the drought.',
+  'Doctor Luke recorded the account.',
+  'Benjamin was the youngest of Jacob\u2019s sons.',
+]) {
+  assert.equal(dropPreacher(line, P), line, `left alone: ${line}`);
+}
 
 // Writing that was already about the message is left alone.
 const clean = 'Waiting changes your capacity, not your circumstances.';

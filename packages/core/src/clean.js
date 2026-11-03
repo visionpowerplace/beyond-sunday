@@ -61,45 +61,39 @@ export function dropPreacher(text, preacher) {
   let s = String(text ?? '');
   if (!s) return s;
 
+  // Deliberately short, and deliberately not "dr", "apostle", "prophet" or
+  // "elder". "dr\.?" matches the first two letters of "dream". The others
+  // belong to Paul, Isaiah and John far more often than to whoever preached
+  // on Sunday, and stripping them vandalises the scripture in the writing.
+  const TITLE = '(?:[Pp]astor|[Pp]reacher|[Rr]everend|[Bb]ishop)';
+
+  // "Pastor Beckley reminds us that X" and "the pastor explains that X".
+  const SAYS = '(?:says|said|tells|told|reminds|reminded|explains|explained|teaches|taught'
+    + '|argues|argued|notes|noted|points out|pointed out|urges|urged|shows|showed|asks|asked)';
+
+  s = s.replace(new RegExp(`\\b(?:[Tt]he\\s+)?${TITLE}\\b(?:\\s+[A-Z][\\w'’-]+){0,2}\\s+${SAYS}\\s+(?:us\\s+)?(?:that\\s+)?`, 'g'), '');
+  s = s.replace(new RegExp(`\\b(?:[Tt]his|[Tt]he)\\s+(?:message|sermon)\\s+${SAYS}\\s+(?:us\\s+)?(?:that\\s+)?`, 'g'), '');
+
+  // A bare honorific with a name after it: "Pastor Beckley" -> nothing.
+  // The honorific needs its own word boundary so it cannot eat into a word.
+  s = s.replace(new RegExp(`\\b(?:[Tt]he\\s+)?${TITLE}\\b(\\s+[A-Z][\\w'’-]+){1,2}\\s+${SAYS}\\s+(?:us\\s+)?(?:that\\s+)?`, 'g'), '');
+  s = s.replace(new RegExp(`\\b(?:[Tt]he\\s+)?${TITLE}\\b(\\s+[A-Z][\\w'’-]+){1,2}`, 'g'), '');
+
+  // Only the full name, and only the surname on its own. Never the first
+  // name: a preacher called Benjamin, John or Paul shares it with half of
+  // scripture, and the sermon is probably talking about them, not him.
+  const parts = String(preacher ?? '').trim().split(/\s+/)
+    .filter(w => w.length > 2 && !new RegExp(`^${TITLE}$`, 'i').test(w) && !/^(rev|dr|mr|mrs|ms)\.?$/i.test(w));
   const names = [];
-  const full = String(preacher ?? '').trim();
-  if (full) {
-    names.push(full);
-    // "Pastor Benjamin Beckley" is also "Beckley" and "Benjamin".
-    for (const part of full.split(/\s+/)) {
-      if (part.length > 2 && !/^(pastor|rev|reverend|dr|bishop|minister|elder|apostle|prophet)\.?$/i.test(part)) {
-        names.push(part);
-      }
-    }
-  }
+  if (parts.length > 1) names.push(parts.join(' '), parts[parts.length - 1]);
+  else if (parts.length === 1) names.push(parts[0]);
 
-  const titled = '(?:pastor|the pastor|the preacher|the speaker|the teacher|the minister|rev\\.?|reverend|dr\\.?|bishop|apostle|prophet|elder)';
-  const patterns = [
-    // "Pastor Beckley reminds us that X" -> "X"
-    new RegExp(`\\b${titled}\\s+[A-Z][\\w'’-]*(?:\\s+[A-Z][\\w'’-]*)?\\s+(?:says|said|tells|told|reminds|reminded|explains|explained|teaches|taught|argues|argued|notes|noted|points out|pointed out|urges|urged|shows|showed|asks|asked)\\s+(?:us\\s+)?(?:that\\s+)?`, 'gi'),
-    new RegExp(`\\b(?:${titled}|the message|this message|the sermon|this sermon)\\s+(?:says|said|tells|told|reminds|reminded|explains|explained|teaches|taught|argues|argued|notes|noted|points out|pointed out|urges|urged|shows|showed)\\s+(?:us\\s+)?(?:that\\s+)?`, 'gi'),
-  ];
-
-  for (const re of patterns) s = s.replace(re, '');
-
-  // A bare honorific with a name after it, in any casing. The honorific is
-  // matched case-insensitively, so the name is checked in the replacer
-  // instead: an uppercase word after "Pastor" is a name and goes with it,
-  // while "pastor and the elders" keeps its "and".
-  s = s.replace(
-    new RegExp(`\\b${titled}((?:\\s+[\\w'’-]+){0,2})`, 'gi'),
-    (_m, trailing) => {
-      const words = String(trailing).trim().split(/\s+/).filter(Boolean);
-      const taken = [];
-      for (const w of words) {
-        if (/^[A-Z][\w'’-]*$/.test(w)) taken.push(w); else break;
-      }
-      return words.slice(taken.length).length
-        ? ' ' + words.slice(taken.length).join(' ')
-        : '';
-    });
   for (const name of names) {
-    s = s.replace(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:'s|’s)?\\b`, 'gi'), '');
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // "Beckley says that X" loses the whole clause, not just the name, or
+    // the sentence is left starting on a dangling verb.
+    s = s.replace(new RegExp(`\\b${esc}\\s+${SAYS}\\s+(?:us\\s+)?(?:that\\s+)?`, 'g'), '');
+    s = s.replace(new RegExp(`\\b${esc}(?:'s|’s)?\\b`, 'g'), '');
   }
 
   return s

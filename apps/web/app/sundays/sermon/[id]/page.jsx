@@ -135,7 +135,7 @@ export default async function SermonPage({ params, searchParams }) {
             {making && !group.length && (
               <div className="card"><Working label={kind.label} /></div>
             )}
-            {group.map(item => <ItemCard key={item.id} item={item} sermonId={sermon.id} networks={networks} />)}
+            {group.map(item => <ItemCard key={item.id} item={item} sermonId={sermon.id} networks={networks} show={tab} />)}
           </section>
         );
       })}
@@ -187,7 +187,7 @@ function labelFor(status) {
   }[status] ?? status.replace(/_/g, ' ');
 }
 
-function ItemCard({ item, sermonId, networks }) {
+function ItemCard({ item, sermonId, networks, show }) {
   const body = item.body ?? {};
   const flags = item.flags ?? [];
   const scripture = item.scripture ?? [];
@@ -305,6 +305,7 @@ function ItemCard({ item, sermonId, networks }) {
           <form action={shareAction} className="share">
             <input type="hidden" name="id" value={item.id} />
             <input type="hidden" name="sermonId" value={sermonId} />
+            <input type="hidden" name="show" value={show ?? ''} />
 
             <div className="share-head">Send this out</div>
 

@@ -259,13 +259,18 @@ export async function rejectAction(formData) {
 export async function shareAction(formData) {
   const id = String(formData.get('id'));
   const sermonId = String(formData.get('sermonId'));
-  const back = `/sundays/sermon/${sermonId}`;
+  // Keep the reader on the deliverable they were looking at. Without this the
+  // redirect drops them back on the first tab, hunting for the item they
+  // just acted on.
+  const show = String(formData.get('show') || '');
+  const back = `/sundays/sermon/${sermonId}${show ? `?show=${encodeURIComponent(show)}` : ''}`;
+  const sep = show ? '&' : '?';
   const intent = String(formData.get('intent') || 'schedule');
   const when = String(formData.get('when') || '');
   const networks = formData.getAll('networks').map(String).filter(Boolean);
 
   if (!networks.length) {
-    redirect(`${back}?problem=${encodeURIComponent('Tick at least one account to post to.')}`);
+    redirect(`${back}${sep}problem=${encodeURIComponent('Tick at least one account to post to.')}`);
   }
 
   if (intent === 'now') {
@@ -273,20 +278,20 @@ export async function shareAction(formData) {
     const started = await publishNow(id);
     revalidatePath(back);
     redirect(started
-      ? `${back}?posted=${encodeURIComponent(`Posting to ${networks.join(' and ')} now.`)}`
-      : `${back}?problem=${encodeURIComponent('Could not start posting. Try again.')}`);
+      ? `${back}${sep}posted=${encodeURIComponent(`Posting to ${networks.join(' and ')} now.`)}`
+      : `${back}${sep}problem=${encodeURIComponent('Could not start posting. Try again.')}`);
   }
 
   if (!when) {
-    redirect(`${back}?problem=${encodeURIComponent('Pick a date and time, or use Post now.')}`);
+    redirect(`${back}${sep}problem=${encodeURIComponent('Pick a date and time, or use Post now.')}`);
   }
   const at = new Date(when);
   if (Number.isNaN(at.getTime())) {
-    redirect(`${back}?problem=${encodeURIComponent('That date did not make sense.')}`);
+    redirect(`${back}${sep}problem=${encodeURIComponent('That date did not make sense.')}`);
   }
   await scheduleItem(id, at, networks);
   revalidatePath(back);
-  redirect(`${back}?posted=${encodeURIComponent(`Scheduled for ${at.toLocaleString()} on ${networks.join(' and ')}.`)}`);
+  redirect(`${back}${sep}posted=${encodeURIComponent(`Scheduled for ${at.toLocaleString()} on ${networks.join(' and ')}.`)}`);
 }
 
 export async function scheduleAction(formData) {

@@ -148,7 +148,7 @@ export default async function SermonPage({ params, searchParams }) {
       {/* The make-more controls used to sit under every card on the page, so
           asking for a devotional meant scrolling past forty items to reach
           them. They belong beside the work, not after it. */}
-      {sermon.transcript && (missing.length > 0 || pending.length > 0) && (
+      {sermon.transcript && (
         <aside className="work-side">
           <div className="make">
             <div className="make-head">Add to this sermon</div>
@@ -170,15 +170,17 @@ export default async function SermonPage({ params, searchParams }) {
               ) : null;
             })}
 
-            {missing.length === 0 && (
+            {missing.length === 0 && pending.length === 0 && (
               <p className="small muted" style={{ margin: '4px 0 0' }}>
                 Everything this sermon can make has been made.
               </p>
             )}
 
-            <p className="small muted" style={{ margin: '10px 0 0' }}>
-              Each takes about a minute and uses the transcript you already have.
-            </p>
+            {missing.length > 0 && (
+              <p className="small muted" style={{ margin: '10px 0 0' }}>
+                Each takes about a minute and uses the transcript you already have.
+              </p>
+            )}
           </div>
         </aside>
       )}

@@ -101,6 +101,9 @@ export default async function SermonPage({ params, searchParams }) {
         </div>
       )}
 
+      <div className="work">
+      <div className="work-main">
+
       {available.length > 1 && (
         <nav className="tabs" aria-label="Deliverables">
           {available.map(k => (
@@ -140,25 +143,46 @@ export default async function SermonPage({ params, searchParams }) {
         );
       })}
 
-      {sermon.transcript && missing.length > 0 && (
-        <section>
-          <h2>Add to this sermon</h2>
-          <p className="small muted" style={{ margin: 0 }}>
-            Made only when you ask. Each takes about a minute and uses the transcript you already have.
-          </p>
-          <div className="card">
-            <div className="row">
-              {missing.map(kind => (
-                <form action={generateKindAction} key={kind.key}>
-                  <input type="hidden" name="sermonId" value={sermon.id} />
-                  <input type="hidden" name="kind" value={kind.key} />
-                  <AddButton label={kind.label} />
-                </form>
-              ))}
-            </div>
+      </div>
+
+      {/* The make-more controls used to sit under every card on the page, so
+          asking for a devotional meant scrolling past forty items to reach
+          them. They belong beside the work, not after it. */}
+      {sermon.transcript && (missing.length > 0 || pending.length > 0) && (
+        <aside className="work-side">
+          <div className="make">
+            <div className="make-head">Add to this sermon</div>
+
+            {missing.map(kind => (
+              <form action={generateKindAction} key={kind.key}>
+                <input type="hidden" name="sermonId" value={sermon.id} />
+                <input type="hidden" name="kind" value={kind.key} />
+                <AddButton label={kind.label} />
+              </form>
+            ))}
+
+            {pending.map(key => {
+              const k = KINDS.find(x => x.key === key);
+              return k ? (
+                <div key={key} className="make-pending">
+                  <span className="spinner" /> {k.label}
+                </div>
+              ) : null;
+            })}
+
+            {missing.length === 0 && (
+              <p className="small muted" style={{ margin: '4px 0 0' }}>
+                Everything this sermon can make has been made.
+              </p>
+            )}
+
+            <p className="small muted" style={{ margin: '10px 0 0' }}>
+              Each takes about a minute and uses the transcript you already have.
+            </p>
           </div>
-        </section>
+        </aside>
       )}
+      </div>
     </>
   );
 }

@@ -54,15 +54,16 @@ export default async function Sundays({ searchParams }) {
             <div style={{ flex: 1, minWidth: 200 }}>
               <label htmlFor="preacher">Preacher</label>
               <input id="preacher" name="preacher" placeholder="Pastor's name" />
-            <p className="small muted" style={{ margin: '4px 0 0' }}>
-              For your records. The writing speaks to the message, not the preacher.
-            </p>
             </div>
             <div style={{ flex: 1, minWidth: 200 }}>
               <label htmlFor="churchName">Church</label>
               <input id="churchName" name="churchName" defaultValue={church?.name ?? ''} />
             </div>
           </div>
+          <p className="small muted" style={{ margin: '6px 0 0' }}>
+            The preacher is for your own records. The writing speaks to the message, not to
+            whoever delivered it.
+          </p>
 
           <div className="row">
             <div style={{ flex: 1, minWidth: 160 }}>

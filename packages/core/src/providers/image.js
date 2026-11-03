@@ -12,7 +12,34 @@ import { config } from '../config.js';
  * that cannot be made is worse than a slide without a photograph.
  */
 
-export async function generateImage(prompt, { width = 1080, height = 1350, seed, provider, onProblem } = {}) {
+/**
+ * One image request at a time, across the whole worker.
+ *
+ * OpenRouter reserves credit against each in-flight request and refuses a new
+ * one that would exceed the balance while others are outstanding — so three
+ * carousel jobs running in parallel knocked each other out and came back with
+ * two photographs out of five. Generation is slow anyway; queueing costs
+ * little and turns a partial deck into a whole one.
+ */
+let gate = Promise.resolve();
+export function oneAtATime(fn) {
+  const run = gate.then(fn, fn);
+  gate = run.then(() => {}, () => {});
+  return run;
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/** True for the 402 that means "not right now", as opposed to "no money". */
+export function isCongestion(message) {
+  return /in-flight/i.test(String(message));
+}
+
+export async function generateImage(prompt, opts = {}) {
+  return oneAtATime(() => generateOnce(prompt, opts));
+}
+
+async function generateOnce(prompt, { width = 1080, height = 1350, seed, provider, onProblem } = {}) {
   const note = (msg) => { console.error(`[image] ${msg}`); onProblem?.(msg); };
   if (!prompt?.trim()) return null;
   // A church can pick its own; otherwise the deployment's default.
@@ -26,7 +53,7 @@ export async function generateImage(prompt, { width = 1080, height = 1350, seed,
   try {
     switch (chosen) {
       case 'pollinations': return await pollinations(prompt, { width, height, seed });
-      case 'openrouter':   return await openrouterImage(prompt, { width, height });
+      case 'openrouter':   return await withRetry(() => openrouterImage(prompt, { width, height }));
       case 'local':        return await localFile();
       case 'none':         return null;
       default:             return null;
@@ -34,6 +61,21 @@ export async function generateImage(prompt, { width = 1080, height = 1350, seed,
   } catch (err) {
     note(`${chosen} could not make the photograph — ${err.message}`);
     return null;
+  }
+}
+
+/**
+ * A congestion 402 clears once the other requests settle, so wait and ask
+ * again rather than dropping the slide to a drawn background.
+ */
+export async function withRetry(fn, attempts = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i >= attempts || !isCongestion(err.message)) throw err;
+      await sleep(i * 4000);
+    }
   }
 }
 

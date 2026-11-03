@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { sql, closeDb } from '../packages/core/src/db.js';
 import { enqueue, claimNext, heartbeat, releaseJobs, reclaimStale } from '../packages/core/src/queue.js';
 
-await sql`delete from jobs`;
-await sql`delete from churches`;
 const [church] = await sql`insert into churches (name) values ('Heartbeat Test') returning *`;
 const [sermon] = await sql`
   insert into sermons (church_id, title, status) values (${church.id}, 'HB', 'generating') returning *`;
@@ -49,6 +47,17 @@ const [released] = await sql`select status, locked_by, attempts from jobs where 
 assert.equal(released.status, 'queued', 'released back to the queue');
 assert.equal(released.locked_by, null, 'lock cleared');
 assert.equal(released.attempts, attemptsBefore - 1, 'the restart is not a failed attempt');
+
+// Leave nothing behind. Other tests call claimNext() without filtering by
+// sermon, so a job left queued here is picked up by whichever test runs
+// next and fails it on a sermon that has no transcript.
+await sql`delete from jobs where sermon_id = ${sermon.id}`;
+await sql`delete from items where sermon_id = ${sermon.id}`;
+await sql`delete from sermons where id = ${sermon.id}`;
+await sql`delete from churches where id = ${church.id}`;
+
+const [{ n: leftover }] = await sql`select count(*)::int as n from jobs where sermon_id = ${sermon.id}`;
+assert.equal(leftover, 0, 'this test leaves no job on the queue');
 
 console.log('heartbeat: ok — lock refreshed, foreign worker refused, release works');
 await closeDb();

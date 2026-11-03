@@ -23,11 +23,11 @@ export default async function Landing() {
         <h1>One sermon in.<br />A week of content out.</h1>
         <p className="lede">
           Upload Sunday’s recording. Get clips, points, carousels, write-ups, a summary and a five-day
-          devotional — each one waiting for someone to approve it before it goes anywhere.
+          devotional. Each one waits for someone to approve it before it goes anywhere.
         </p>
         <div className="row" style={{ gap: 10, marginTop: 24 }}>
           <a className="btn primary" href={user ? '/sundays' : '/signup'}>
-            {user ? 'Go to your sermons' : `Start free — ${trial.sermons} sermons`}
+            {user ? 'Go to your sermons' : `Start free: ${trial.sermons} sermons`}
           </a>
           <a className="btn" href="/pricing">See pricing</a>
         </div>
@@ -82,7 +82,7 @@ export default async function Landing() {
           <div className="card">
             <h3>Every size you need</h3>
             <p className="small muted" style={{ margin: 0 }}>
-              9:16 for reels, 4:5 for the feed, 1:1 and 16:9 — re-cut from the same sermon.
+              9:16 for reels, 4:5 for the feed, 1:1 and 16:9, all re-cut from the same sermon.
             </p>
           </div>
           <div className="card">

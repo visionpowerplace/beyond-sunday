@@ -16,7 +16,7 @@ export default async function Settings({ searchParams }) {
     return (
       <>
         <h1>Settings</h1>
-        <p className="sub">Nothing to set up yet — make a sermon first and your church is created with it.</p>
+        <p className="sub">Nothing to set up yet. Make a sermon first and your church is created with it.</p>
         <a className="btn" href="/sundays">Back</a>
       </>
     );
@@ -72,7 +72,7 @@ export default async function Settings({ searchParams }) {
         <select id="imageProvider" name="imageProvider" defaultValue={church.image_provider ?? ''}>
           <option value="">Free (slower, quality varies)</option>
           <option value="openrouter">Paid, better quality (about 20c a carousel)</option>
-          <option value="none">No photographs — use the drawn backgrounds</option>
+          <option value="none">No photographs, use the drawn backgrounds</option>
         </select>
         <p className="small muted" style={{ margin: '4px 0 0' }}>
           Change this, then press Redo on a carousel to compare the two on the same slides.
@@ -81,13 +81,13 @@ export default async function Settings({ searchParams }) {
         <label htmlFor="aspect">Default clip size</label>
         <select id="aspect" name="aspect" defaultValue={church.default_aspect ?? '9:16'}>
           {Object.entries(ASPECTS).map(([key, a]) => (
-            <option key={key} value={key}>{key} — {a.label}</option>
+            <option key={key} value={key}>{key}: {a.label}</option>
           ))}
         </select>
 
         <h3 style={{ margin: '22px 0 0' }}>Your accounts</h3>
         <p className="small muted" style={{ margin: '2px 0 0' }}>
-          Used in captions and on exports. Connecting them for automatic posting is a separate step —
+          Used in captions and on exports. Connecting them for automatic posting is a separate step,
           see the note below.
         </p>
         {NETWORKS.map(n => (
@@ -118,7 +118,7 @@ export default async function Settings({ searchParams }) {
       <p className="small muted" style={{ margin: 0 }}>
         Connect the channel once and a sermon can start from a YouTube link: we read the caption track
         off your own video, so there is nothing to upload and nothing to transcribe. This is separate
-        from connecting YouTube to post — that one is further down.
+        from connecting YouTube to post, which is further down.
       </p>
       <div className="card">
         {!googleReady ? (
@@ -137,7 +137,7 @@ export default async function Settings({ searchParams }) {
               </form>
             </div>
             <p className="small muted" style={{ margin: '8px 0 0' }}>
-              This reads captions from videos on this channel. It cannot download a video — YouTube has
+              This reads captions from videos on this channel. It cannot download a video, because YouTube has
               no such endpoint for anyone, including you.
             </p>
           </>
@@ -172,7 +172,7 @@ export default async function Settings({ searchParams }) {
           <p className="small muted" style={{ margin: 0 }}>
             Approved items post to whichever of these you pick. Connecting opens the network&rsquo;s own
             sign-in; we never see your password. Connecting YouTube here lets us post to it, which is a
-            different permission from reading your captions above — a church that wants both connects both.
+            different permission from reading your captions above, so a church that wants both connects both.
           </p>
           <div className="card">
             {accounts.length > 0 && accounts.map(a => (

@@ -17,7 +17,17 @@ HARD RULES
 2. Scripture references must be exactly as the preacher said them. If you are unsure which chapter and verse was meant, leave them out rather than guessing.
 3. Write in the preacher's register, not in marketing voice. No hype words, no emoji in body text, no "game-changing", no "unlock".
 4. If the transcript is too short, too broken or too off-topic to do this honestly, return fewer items. Never pad.
-5. Return only the JSON object asked for.`;
+5. Return only the JSON object asked for.
+
+WHO THE WRITING IS ABOUT
+6. Write about the message, never about the person who preached it. Never name the preacher, and never refer to them at all: no "Pastor", no "the pastor", no "the preacher", no "he", no "she", no "the speaker", no "this message by". You are not told their name and you must not guess it from the transcript.
+7. Say what is true, not who said it. Write "Waiting changes your capacity, not your circumstances", never "the pastor explains that waiting changes your capacity". Address the reader directly, or state the claim plainly.
+8. This applies to every field you produce: headlines, body text, captions, summaries and devotionals alike.
+
+PUNCTUATION
+9. Never use an em dash or an en dash. Not "—", not "–". Where you would reach for one, use a comma, a colon, a semicolon, a full stop, or brackets, and pick whichever is actually correct.
+10. Use ordinary hyphens only inside genuinely hyphenated words, such as "five-day" or "self-control".
+11. Straight sentences and ordinary punctuation. No ellipses for effect, no exclamation marks.`;
 
 const CLIP_TASK = `Choose the moments that work as standalone short videos.
 
@@ -41,7 +51,7 @@ Timing: between 20 and 75 seconds, aim for 30 to 45. start_s at the start of a s
 
 4 to 8 clips, best first. music_warning is true if the transcript shows singing or a worship set, because clips over music get muted or claimed by rights holders.`;
 
-const HIGHLIGHT_TASK = `Find the things this sermon actually argued. Not topics — claims.
+const HIGHLIGHT_TASK = `Find the things this sermon actually argued. Not topics, claims.
 
 {
   "highlights": [
@@ -141,12 +151,14 @@ export function buildUser({ kind, title, preacher, church, durationS, segments, 
 
   const points = spec.needsHighlights && highlights?.length
     ? `\nTHE POINTS, in order (highlight_index is their position here, starting at 0):\n`
-      + highlights.map((h, i) => `${i}. ${h.point}${h.explain ? ' — ' + h.explain : ''}`).join('\n') + '\n'
+      + highlights.map((h, i) => `${i}. ${h.point}${h.explain ? '. ' + h.explain : ''}`).join('\n') + '\n'
     : '';
 
+  // The preacher's name is deliberately not here. It is recorded on the sermon
+  // for the church's own reference, but a model given a name will use it, and
+  // the writing should speak to the message rather than to who delivered it.
   return `SERMON
 Title: ${title}
-Preacher: ${preacher || 'unknown'}
 Church: ${church || 'unknown'}
 Length of this section: ${durationS ? fmt(durationS) : 'unknown'}
 
@@ -162,7 +174,7 @@ ${spec.task}`;
 
 export const LOCATE_SYSTEM = `You are given the timestamped transcript of a church service. Find where the preaching is.
 
-A full service recording usually runs: welcome, worship songs, announcements, offering, the sermon, an altar call, a closing. You are looking for the teaching block only — one person speaking continuously, developing an argument, usually the longest unbroken stretch of speech in the recording.
+A full service recording usually runs: welcome, worship songs, announcements, offering, the sermon, an altar call, a closing. You are looking for the teaching block only: one person speaking continuously, developing an argument, usually the longest unbroken stretch of speech in the recording.
 
 Do NOT include: sung worship, the song lyrics between verses, announcements, the offering appeal, the welcome, the benediction. A short prayer immediately before or after the sermon may be included if it runs straight into the teaching.
 

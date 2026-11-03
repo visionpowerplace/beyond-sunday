@@ -199,7 +199,7 @@ function ItemCard({ item, sermonId, networks }) {
       </div>
 
       {item.kind === 'clip' && (
-        <div className="small muted">{fmt(item.start_s)} – {fmt(item.end_s)} · {Math.round(item.end_s - item.start_s)}s</div>
+        <div className="small muted">{fmt(item.start_s)} to {fmt(item.end_s)} · {Math.round(item.end_s - item.start_s)}s</div>
       )}
 
       {flags.map(f => <span key={f} className="flag">{flagText(f)}</span>)}
@@ -272,7 +272,7 @@ function ItemCard({ item, sermonId, networks }) {
 
       {scripture.length > 0 && (
         <p className="small muted">
-          {scripture.map(s => s.ref + (s.unverified ? ' (unverified — not heard in the audio)' : '')).join(' · ')}
+          {scripture.map(s => s.ref + (s.unverified ? ' (unverified, not heard in the audio)' : '')).join(' · ')}
         </p>
       )}
 
@@ -321,7 +321,7 @@ function ItemCard({ item, sermonId, networks }) {
               </form>
             )}
             <p className="small muted" style={{ margin: '6px 0 0' }}>
-              Tick the networks, then pick a time — or post it straight away.
+              Tick the networks, then pick a time, or post it straight away.
             </p>
           </div>
         ) : (
@@ -367,7 +367,7 @@ function flagText(f) {
   return {
     cut_off_argument: 'This clip may end mid-argument. Watch it before approving.',
     needs_context: 'This may not make sense without what came before it.',
-    sensitive: 'Pastoral or sensitive content — check before this goes public.',
+    sensitive: 'Pastoral or sensitive content. Check before this goes public.',
     music_under_speech: 'There is worship music in this service. Clips over music get muted or claimed on YouTube and Instagram.',
   }[f] ?? f;
 }

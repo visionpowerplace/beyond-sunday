@@ -22,7 +22,8 @@ function toSeconds(raw) {
 export async function newSermonAction(formData) {
   const title = String(formData.get('title') || '').trim();
   const rawUrl = String(formData.get('sourceUrl') || '').trim();
-  const mode = String(formData.get('mode') || 'link');
+  // Upload is the default now that pasting a link is gone from the form.
+  const mode = String(formData.get('mode') || 'upload');
   if (!title) return;
   if (mode === 'link' && !rawUrl) return;
 
@@ -144,7 +145,7 @@ export async function addCreditsAction(formData) {
   await sql`update churches set extra_credits = extra_credits + ${pack.sermons} where id = ${church.id}`;
   await sql`
     insert into credit_ledger (church_id, delta, reason)
-    values (${church.id}, ${pack.sermons}, ${`added ${pack.sermons} sermons (no charge — checkout not connected)`})`;
+    values (${church.id}, ${pack.sermons}, ${`added ${pack.sermons} sermons (no charge, checkout not connected)`})`;
   redirect(`/billing?done=${encodeURIComponent(`${pack.sermons} sermons added.`)}`);
 }
 

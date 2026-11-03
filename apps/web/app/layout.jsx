@@ -4,7 +4,7 @@ import { logoutAction } from './auth-actions.js';
 
 export const metadata = {
   title: 'Beyond Sunday',
-  description: 'One sermon in, a week of content out — reviewed before anything goes public.',
+  description: 'One sermon in, a week of content out, reviewed before anything goes public.',
 };
 
 export default async function RootLayout({ children }) {
@@ -40,7 +40,7 @@ export default async function RootLayout({ children }) {
           {church?.plan === 'trial' && (
             <div className="trialbar">
               <div className="wrap small">
-                Free trial{church.trial_ends_at ? ` — ends ${new Date(church.trial_ends_at).toLocaleDateString()}` : ''}.
+                Free trial{church.trial_ends_at ? `, ends ${new Date(church.trial_ends_at).toLocaleDateString()}` : ''}.
                 {' '}<a href="/billing">See plans</a>
               </div>
             </div>

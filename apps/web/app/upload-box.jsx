@@ -42,7 +42,7 @@ export default function UploadBox({ url, accept = 'video/*,audio/*', label = 'Ch
           <div style={{ height: 8, background: 'var(--line)', borderRadius: 999, marginTop: 10, overflow: 'hidden' }}>
             <div style={{ width: `${pct}%`, height: '100%', background: 'var(--gold)', transition: 'width .2s' }} />
           </div>
-          <p className="small muted">{pct}% — keep this tab open.</p>
+          <p className="small muted">{pct}%. Keep this tab open.</p>
         </>
       )}
       {error && <span className="flag">{error}</span>}

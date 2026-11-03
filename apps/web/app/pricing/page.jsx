@@ -63,7 +63,7 @@ export default async function Pricing() {
         <h2>What counts as a sermon</h2>
         <p className="lede">
           One recording. Transcribing it, finding the preaching inside a full service, the clips, and
-          every deliverable you ask for afterwards — all of it is that one sermon.
+          every deliverable you ask for afterwards. All of it is that one sermon.
         </p>
         <p className="small muted">
           Redoing a set because the first attempt missed the point costs nothing extra. Correcting the

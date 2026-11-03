@@ -1,4 +1,5 @@
 import { sql } from '../db.js';
+import { cleanDeep } from '../clean.js';
 import { enqueue } from '../queue.js';
 import { completeJson } from '../providers/llm.js';
 import { BASE_SYSTEM, KINDS, buildUser, LOCATE_SYSTEM, locateUser } from './prompts.js';
@@ -77,7 +78,9 @@ async function generateKind({ kind, sermon, context, transcript, win, highlights
     maxTokens: KINDS[kind].maxTokens,
   })) ?? mockFor(kind, context);
 
-  const rows = toItems(kind, data, sermon, transcript);
+  // The prompt asks for no dashes and no mention of who preached. This makes
+  // it true whatever the model actually returned.
+  const rows = toItems(kind, cleanDeep(data, sermon.preacher), sermon, transcript);
 
   if (kind === 'clip') {
     const musicFlag = data.music_warning ? ['music_under_speech'] : [];

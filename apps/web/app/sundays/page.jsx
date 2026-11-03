@@ -1,6 +1,5 @@
 import { listSermons, storageStatus } from '../../lib/data.js';
 import { newSermonAction, deleteSermonAction, deleteFailedAction } from '../actions.js';
-import { SUPPORTED_SOURCES } from '@bs/core/source-url.js';
 import NewSermonForm from '../new-sermon-form.jsx';
 import { requireUser, currentChurch } from '../../lib/auth.js';
 import { balance } from '@bs/core/billing.js';
@@ -28,7 +27,7 @@ export default async function Sundays({ searchParams }) {
           {credit.total} sermon{credit.total === 1 ? '' : 's'} left
         </a>
       </div>
-      <p className="sub">Paste a sermon link. You get clips, points, carousels, write-ups, a summary and a five-day devotional — all waiting for your approval.</p>
+      <p className="sub">Upload the recording or paste the transcript. You get clips, points, carousels, write-ups, a summary and a five-day devotional, all waiting for your approval.</p>
 
       {params?.problem && <div className="flag">{String(params.problem)}</div>}
 
@@ -48,13 +47,16 @@ export default async function Sundays({ searchParams }) {
       )}
 
       <form action={newSermonAction} className="card">
-        <NewSermonForm sources={SUPPORTED_SOURCES} youtubeConnected={Boolean(church?.google_refresh_token)} savedFeed={church?.feed_url ?? null}>
+        <NewSermonForm>
           <label htmlFor="title">Sermon title</label>
           <input id="title" name="title" required placeholder="A Power In Silence" />
           <div className="row">
             <div style={{ flex: 1, minWidth: 200 }}>
               <label htmlFor="preacher">Preacher</label>
               <input id="preacher" name="preacher" placeholder="Pastor's name" />
+            <p className="small muted" style={{ margin: '4px 0 0' }}>
+              For your records. The writing speaks to the message, not the preacher.
+            </p>
             </div>
             <div style={{ flex: 1, minWidth: 200 }}>
               <label htmlFor="churchName">Church</label>
@@ -65,7 +67,7 @@ export default async function Sundays({ searchParams }) {
           <div className="row">
             <div style={{ flex: 1, minWidth: 160 }}>
               <label htmlFor="startAt">Sermon starts at</label>
-              <input id="startAt" name="startAt" placeholder="e.g. 42:10 — leave blank to find it" />
+              <input id="startAt" name="startAt" placeholder="e.g. 42:10, or leave blank" />
             </div>
             <div style={{ flex: 1, minWidth: 160 }}>
               <label htmlFor="endAt">Sermon ends at</label>
@@ -73,8 +75,8 @@ export default async function Sundays({ searchParams }) {
             </div>
           </div>
           <p className="small muted" style={{ margin: '6px 0 0' }}>
-            Full service recording? Give the times and only the preaching is used. Leave them blank and
-            the preaching block is found for you — you can correct it afterwards.
+            Full service recording? Give the times and only the preaching is used. Leave them blank
+            and the preaching block is found for you, and you can correct it afterwards.
           </p>
 
           <div style={{ marginTop: 14 }}>

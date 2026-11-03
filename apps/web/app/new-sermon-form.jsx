@@ -1,106 +1,22 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 
 /**
- * Paste a YouTube link and the form fills itself in.
+ * Two ways in, and both of them work.
  *
- * YouTube has no download method on any of its APIs — not for anyone, not
- * even for the channel that owns the video — so the file still has to come
- * from the person. What the link can legitimately give us is the title and
- * the channel, which is most of the typing, plus a direct link into YouTube
- * Studio where the owner can download their own original.
+ * There were four. Pasting a link asked a server to fetch the video, which
+ * YouTube refuses and most church platforms gate behind a session, so it
+ * failed far more often than it worked. A sermon feed only ever helped the
+ * churches whose platform publishes one. Both are gone from the form rather
+ * than left there to waste a Sunday morning. The code behind them is still in
+ * the repo and can come back once it earns its place.
+ *
+ * What is left: upload the file, which always works and is the only route to
+ * clips, or paste the transcript, which needs no video at all.
  */
-export default function NewSermonForm({ sources, youtubeConnected, savedFeed, children }) {
+export default function NewSermonForm({ children }) {
   const [mode, setMode] = useState('upload');
-  const [yt, setYt] = useState(null);
-  const [looking, setLooking] = useState(false);
-  const [pulling, setPulling] = useState(false);
-  const [pulled, setPulled] = useState(null);
-  const [pullError, setPullError] = useState(null);
-  const captionsRef = useRef(null);
-  const [feed, setFeed] = useState(null);
-  const [feedError, setFeedError] = useState(null);
-  const [loadingFeed, setLoadingFeed] = useState(false);
-  const [chosen, setChosen] = useState(null);
-  const urlRef = useRef(null);
-  // The title and preacher inputs are passed in as children, so a ref never
-  // reaches them. They have ids, so look them up when there is something to fill.
-  const fill = (id, value) => {
-    const el = document.getElementById(id);
-    if (el && !el.value && value) el.value = value;
-  };
-
-  async function inspect(value) {
-    const url = value.trim();
-    setYt(null);
-    if (!/youtu\.?be/.test(url)) return;
-
-    setLooking(true);
-    try {
-      const res = await fetch(`/api/youtube?url=${encodeURIComponent(url)}`);
-      const meta = await res.json();
-      if (!meta?.id) return;
-      setYt(meta);
-      // Only fill what the person has not typed themselves.
-      fill('title', meta.title);
-      fill('preacher', meta.channel);
-    } catch { /* the form still works without it */ }
-    finally { setLooking(false); }
-  }
-
-  /** Ask YouTube for the caption track on a video this church owns. */
-  async function pullCaptions(url) {
-    setPulling(true);
-    setPullError(null);
-    setPulled(null);
-    try {
-      const res = await fetch(`/api/captions?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      if (!data.ok) { setPullError(data); return; }
-      setMode('captions');
-      setPulled(data.track ?? {});
-      // The textarea is the form field, so the pulled track goes straight in.
-      requestAnimationFrame(() => { if (captionsRef.current) captionsRef.current.value = data.srt; });
-    } catch {
-      setPullError({ reason: 'Could not reach YouTube just then. Try again.' });
-    } finally {
-      setPulling(false);
-    }
-  }
-
-  /** Read the church's sermon feed and list what is in it. */
-  async function loadFeed(url) {
-    setLoadingFeed(true);
-    setFeedError(null);
-    try {
-      const res = await fetch(`/api/feed${url ? `?url=${encodeURIComponent(url)}` : ''}`);
-      const data = await res.json();
-      if (!data.ok) { setFeedError(data.reason); setFeed(null); return; }
-      setFeed(data);
-    } catch {
-      setFeedError('Could not reach that feed just then. Try again.');
-    } finally {
-      setLoadingFeed(false);
-    }
-  }
-
-  /**
-   * Picking an episode fills the form in. A podcast entry points at a real
-   * file. A YouTube entry does not — a channel feed carries a player url, not
-   * a download — so it points at the watch page and offers the caption pull.
-   */
-  function choose(ep) {
-    setChosen(ep);
-    if (urlRef.current) urlRef.current.value = ep.url;
-    fill('title', ep.title);
-    fill('preacher', ep.author);
-    setPulled(null);
-    setPullError(null);
-    setYt(ep.kind === 'youtube' && ep.videoId
-      ? { id: ep.videoId, title: ep.title, channel: ep.author }
-      : null);
-  }
 
   return (
     <>
@@ -112,186 +28,76 @@ export default function NewSermonForm({ sources, youtubeConnected, savedFeed, ch
           Upload the recording
         </label>
         <label className="small" style={{ margin: 0 }}>
-          <input type="radio" name="mode" value="link" checked={mode === 'link'}
-                 onChange={() => setMode('link')}
-                 style={{ width: 'auto', minHeight: 0, marginRight: 6 }} />
-          Use a link
-        </label>
-        <label className="small" style={{ margin: 0 }}>
-          <input type="radio" name="mode" value="link" checked={mode === 'feed'}
-                 onChange={() => { setMode('feed'); if (savedFeed && !feed) loadFeed(savedFeed); }}
-                 style={{ width: 'auto', minHeight: 0, marginRight: 6 }} />
-          From your sermon feed
-        </label>
-        <label className="small" style={{ margin: 0 }}>
           <input type="radio" name="mode" value="captions" checked={mode === 'captions'}
                  onChange={() => setMode('captions')}
                  style={{ width: 'auto', minHeight: 0, marginRight: 6 }} />
-          Paste the captions
+          Paste the transcript
         </label>
       </div>
 
       <p className="small muted" style={{ margin: '6px 0 0' }}>
         {mode === 'upload'
-          ? 'Any video or audio file, any length. It goes straight to the processing server.'
-          : mode === 'captions'
-            ? 'No video needed. Everything except the clips, in under a minute, and it costs nothing to transcribe.'
-            : mode === 'feed'
-              ? 'Most church media platforms publish one. Paste it once and every Sunday after this is a click.'
-              : `Links work for ${sources.join(', ')}.`}
+          ? 'Any video or audio file, any length. It goes straight to the processing server. This is the only route that gives you clips.'
+          : 'No video needed. Everything except the clips, in under a minute, and it costs nothing to transcribe.'}
       </p>
 
-      {mode === 'feed' && (
-        <>
-          <label htmlFor="feedUrl">Your sermon feed</label>
-          <div className="row" style={{ flexWrap: 'nowrap' }}>
-            <input id="feedUrl" defaultValue={savedFeed ?? ''}
-                   placeholder="your podcast RSS, or a YouTube channel or playlist address"
-                   style={{ flex: 1 }} />
-            <button type="button" disabled={loadingFeed}
-                    onClick={() => loadFeed(document.getElementById('feedUrl').value)}>
-              {loadingFeed ? <span className="spinner" /> : feed ? 'Refresh' : 'Load'}
-            </button>
-          </div>
-
-          {youtubeConnected && (
-            <button type="button" disabled={loadingFeed}
-                    style={{ marginTop: 8 }}
-                    onClick={() => { const el = document.getElementById('feedUrl'); if (el) el.value = ''; loadFeed(''); }}>
-              {loadingFeed ? <><span className="spinner" /> Reading…</> : 'Read my YouTube channel'}
-            </button>
-          )}
-
-          <p className="small muted" style={{ margin: '6px 0 0' }}>
-            A podcast feed carries the audio itself, so it gives clips too. A YouTube
-            channel or playlist address lists your Sundays and their captions, but
-            YouTube serves no file, so those give everything except the clips. A
-            Sermons playlist usually beats the channel — the channel mixes in
-            announcements and worship sets. Look for &ldquo;RSS&rdquo;,
-            &ldquo;Podcast&rdquo; or &ldquo;Subscribe&rdquo; on Subsplash, Church Online
-            Platform, Castr, Buzzsprout and most others.
+      {mode === 'upload' && (
+        <details className="guide">
+          <summary>Where do I get the video file?</summary>
+          <p className="small">
+            If the sermon streamed through Resi, BoxCast, OBS or a camera, the recording on
+            your own machine is the best copy you have. Use that.
           </p>
-          {feedError && <span className="flag">{feedError}</span>}
-
-          {feed && (
-            <div style={{ marginTop: 10 }}>
-              <p className="small muted" style={{ margin: '0 0 6px' }}>
-                {feed.channel ? `${feed.channel.title} — your connected channel` : feed.title}
-              </p>
-              {feed.episodes.map(ep => (
-                <button type="button" key={ep.url}
-                        onClick={() => choose(ep)}
-                        className={`feed-item${chosen?.url === ep.url ? ' on' : ''}`}>
-                  <b>{ep.title}</b>
-                  <span className="small muted">
-                    {ep.published ? new Date(ep.published).toLocaleDateString() : ''}
-                    {ep.durationS ? ` · ${Math.round(ep.durationS / 60)} min` : ''}
-                    {ep.durationS ? '' : ''}
-                    {ep.kind === 'youtube'
-                      ? ' · YouTube — captions only, no clips'
-                      : ep.kind === 'audio' ? ' · audio — no clips from audio' : ' · video'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      <label htmlFor="sourceUrl" style={mode === 'feed' ? { position: 'absolute', left: -9999 } : undefined}>
-        {mode === 'upload' ? 'YouTube link (optional — fills in the details below)' : 'Link to the video file'}
-      </label>
-      <input id="sourceUrl" name="sourceUrl" placeholder="https://..." ref={urlRef}
-             style={mode === 'feed' ? { position: 'absolute', left: -9999 } : undefined}
-             onBlur={e => inspect(e.target.value)}
-             onPaste={e => setTimeout(() => inspect(e.target.value), 0)} />
-
-      {looking && <p className="small muted" style={{ margin: '6px 0 0' }}><span className="spinner" /> Reading that link…</p>}
-
-      {yt?.id && (
-        <div style={{ marginTop: 10 }}>
-          <button type="button" className="primary" disabled={pulling}
-                  onClick={() => pullCaptions(document.getElementById('sourceUrl').value)}>
-            {pulling ? <><span className="spinner" /> Asking YouTube…</> : 'Pull the captions from this video'}
-          </button>
-          <p className="small muted" style={{ margin: '6px 0 0' }}>
-            {youtubeConnected
-              ? 'Works on videos on your connected channel. No upload, and nothing to transcribe.'
-              : 'Needs your YouTube account connected once, in Settings.'}
+          <p className="small"><b>If it only exists on YouTube,</b> and the channel is yours:</p>
+          <ol className="small muted">
+            <li>Open <a href="https://studio.youtube.com" target="_blank" rel="noreferrer">YouTube Studio</a> and sign in as the channel.</li>
+            <li>Go to <b>Content</b> and find the service.</li>
+            <li>Hover the row, open the three dots at the end of it, and choose <b>Download</b>.</li>
+            <li>Come back here and pick that file.</li>
+          </ol>
+          <p className="small muted">
+            A long service is a large file, so give it a few minutes. You can trim it to the
+            preaching below, or leave the times blank and let it find the preaching for you.
           </p>
-        </div>
-      )}
-
-      {pulled && (
-        <p className="small" style={{ color: 'var(--good)', margin: '8px 0 0' }}>
-          Captions pulled{pulled.language ? ` (${pulled.language})` : ''}
-          {pulled.asr ? ' — auto-generated, so check the names and verse references' : ''}. Ready below.
-        </p>
-      )}
-
-      {pullError && (
-        <div className="flag">
-          {pullError.reason}
-          {pullError.needsConnect && <> <a href="/settings">Connect YouTube in Settings</a>.</>}
-        </div>
+          <p className="small muted">
+            Only the channel owner can download, and only through Studio. YouTube has no
+            download in any of its APIs, for anyone, so nothing here can fetch it for you.
+          </p>
+        </details>
       )}
 
       {mode === 'captions' && (
         <>
-          <label htmlFor="captions">Captions or transcript</label>
-          <textarea id="captions" name="captions" rows={8} ref={captionsRef}
-                    placeholder={'WEBVTT\n\n00:00:01.000 --> 00:00:03.500\nprayer is not just for needs\n\n…or an .srt, or just the plain text.'} />
-          <p className="small muted" style={{ margin: '6px 0 0' }}>
-            {yt?.studioUrl ? (
-              <>
-                From <a href={yt.studioUrl} target="_blank" rel="noreferrer">this video in YouTube Studio</a>:
-                {' '}Subtitles → the language → the three dots → <b>Download</b> → .srt or .vtt. Open it and paste it here.
-              </>
-            ) : (
-              <>
-                In YouTube Studio: Subtitles → the language → the three dots → <b>Download</b>. SRT, VTT
-                or plain text all work. With timings you also get clip selections, ready to render as soon
-                as you add the video.
-              </>
-            )}
-          </p>
-        </>
-      )}
+          <label htmlFor="captions">Transcript</label>
+          <textarea id="captions" name="captions" rows={8}
+                    placeholder={'Paste the whole transcript here.\n\nPlain text is fine. So is an .srt or a .vtt file, and those also give you clip selections once you add the video.'} />
 
-      {yt?.id && mode !== 'captions' && (
-        <div className="card" style={{ marginTop: 10 }}>
-          <div className="row" style={{ alignItems: 'flex-start', flexWrap: 'nowrap' }}>
-            {yt.thumbnail && (
-              <img src={yt.thumbnail} alt="" width={120}
-                   style={{ borderRadius: 8, flex: '0 0 auto' }} />
-            )}
-            <div>
-              <b className="small">{yt.title || 'That video'}</b>
-              {yt.channel && <div className="small muted">{yt.channel}</div>}
-            </div>
-          </div>
-          <p className="small" style={{ marginBottom: 6 }}>
-            Details filled in. YouTube will not hand a video file to any server — there is no download
-            method in its API, even for the channel that owns the video. Two ways on from here:
-          </p>
-          <p className="small" style={{ margin: '0 0 6px' }}>
-            <b>Fastest:</b> choose <b>Paste the captions</b> above. You get the points, carousels,
-            write-ups, summary and devotional in under a minute, with no upload at all.
-          </p>
-          <p className="small" style={{ margin: '0 0 4px' }}><b>For clips, you need the file:</b></p>
-          <ol className="small muted" style={{ margin: '0 0 8px', paddingLeft: 20 }}>
-            <li>
-              Open <a href={yt.studioUrl} target="_blank" rel="noreferrer">this video in YouTube Studio</a>
-              {' '}(you need to own the channel).
-            </li>
-            <li>Three dots next to the video → <b>Download</b>.</li>
-            <li>Choose <b>Upload the recording</b> above and pick that file.</li>
-          </ol>
-          <p className="small muted" style={{ margin: 0 }}>
-            Streaming through Resi, BoxCast or OBS? The recording on your own machine is better quality
-            than YouTube&rsquo;s copy anyway.
-          </p>
-        </div>
+          <details className="guide" open>
+            <summary>Where do I get the transcript?</summary>
+            <p className="small"><b>From YouTube, without owning the channel:</b></p>
+            <ol className="small muted">
+              <li>Open the video on YouTube.</li>
+              <li>Under the video, open <b>…more</b> in the description.</li>
+              <li>Click <b>Show transcript</b>.</li>
+              <li>Select the whole panel, copy it, and paste it here.</li>
+            </ol>
+            <p className="small"><b>From YouTube Studio, if the channel is yours:</b></p>
+            <ol className="small muted">
+              <li>Open the video in <a href="https://studio.youtube.com" target="_blank" rel="noreferrer">YouTube Studio</a>.</li>
+              <li>Go to <b>Subtitles</b>, then the language.</li>
+              <li>Open the three dots and choose <b>Download</b>.</li>
+              <li>Open the file and paste what is in it.</li>
+            </ol>
+            <p className="small muted">
+              A .srt or .vtt carries timings, so you also get clip selections, ready to render
+              the moment you add the video. Plain text gives you everything except the clips.
+            </p>
+            <p className="small muted">
+              Auto captions have no punctuation and spell names their own way. They still work,
+              but read the result before you post it.
+            </p>
+          </details>
+        </>
       )}
 
       {children}

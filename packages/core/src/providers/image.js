@@ -59,9 +59,32 @@ async function generateOnce(prompt, { width = 1080, height = 1350, seed, provide
       default:             return null;
     }
   } catch (err) {
-    note(`${chosen} could not make the photograph — ${err.message}`);
+    note(err.message);
     return null;
   }
+}
+
+/**
+ * The provider's own words, not its JSON. A church reading "could not make
+ * the photograph" should get a sentence, not a serialised error object with
+ * a truncated metadata key hanging off the end.
+ */
+async function readError(res) {
+  const body = await res.text().catch(() => '');
+  let message = '';
+  try { message = JSON.parse(body)?.error?.message ?? ''; } catch { /* not json */ }
+  if (!message) message = body.replace(/\s+/g, ' ').slice(0, 160);
+
+  if (res.status === 402) {
+    return /in-flight/i.test(message)
+      ? 'OpenRouter is holding credit against requests already running. Add credit, or try again in a moment.'
+      : 'OpenRouter has run out of credit. Top it up and generate the carousel again.';
+  }
+  if (res.status === 401 || res.status === 403) {
+    return 'OpenRouter refused the key on this deployment. Check OPENROUTER_API_KEY.';
+  }
+  if (res.status === 429) return 'OpenRouter is rate limiting. Try again in a minute.';
+  return `OpenRouter answered ${res.status}. ${message}`.trim();
 }
 
 /**
@@ -134,9 +157,7 @@ async function openrouterImage(prompt, { width, height }) {
     }),
     signal: AbortSignal.timeout(config.image.timeoutMs),
   });
-  // The body can carry a key in an echoed header, so only the status and a
-  // short, quoted snippet go to the log — never the request we sent.
-  if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new Error(await readError(res));
   const data = await res.json();
 
   const b64 = data?.data?.[0]?.b64_json;

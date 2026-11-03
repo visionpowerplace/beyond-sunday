@@ -88,22 +88,32 @@ export async function compose({ slide, index, total, title, brand, logo, photo, 
   if (photo) {
     layers.push({ input: photo, top: 0, left: 0 });
   } else {
-    // No photograph: fall back to the drawn background, which at least
-    // carries the church's colours and the idea of the slide.
+    // No photograph: a drawn background carrying the church's colours.
+    //
+    // It used to be rendered dark, which looked deliberate on its own but
+    // wrong in a deck: when three slides got photographs and one did not, the
+    // odd slide was black in a run of cream and read as a fault. The drawn
+    // slide now sits on the same paper as the rest, so a deck holds together
+    // whatever the generator managed.
     const name = MOTIF_NAMES.includes(String(slide.motif).toLowerCase())
       ? String(slide.motif).toLowerCase()
       : MOTIF_NAMES[index % MOTIF_NAMES.length];
     const { defs, body } = motif(name, { w: W, h: H, primary: brand.primary, accent: brand.accent, index });
     layers.push({
-      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs>${defs}</defs>${body}</svg>`),
+      input: Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">`
+        + `<defs>${defs}</defs><rect width="${W}" height="${H}" fill="#efe9db"/>`
+        + `<g opacity="0.42">${body}</g></svg>`),
       top: 0, left: 0,
     });
   }
 
-  layers.push({ input: Buffer.from(typeLayer({ slide, index, total, title, brand, photo: Boolean(photo) })), top: 0, left: 0 });
+  // The type is laid out the same way either way: the paper wash and dark
+  // ink are the design, not a reaction to having a photograph.
+  layers.push({ input: Buffer.from(typeLayer({ slide, index, total, title, brand, photo: true })), top: 0, left: 0 });
   if (logo) layers.push({ input: logo, top: PAD - 20, left: W - PAD - 96 });
 
-  await sharp({ create: { width: W, height: H, channels: 3, background: brand.primary } })
+  await sharp({ create: { width: W, height: H, channels: 3, background: '#efe9db' } })
     .composite(layers)
     .png({ compressionLevel: 9 })
     .toFile(out);

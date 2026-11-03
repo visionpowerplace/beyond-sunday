@@ -29,7 +29,7 @@ export async function heartbeat(jobIds, workerId) {
   if (!jobIds.length) return;
   await sql`
     update jobs set locked_at = now()
-    where id = any(${sql.array(jobIds)}) and locked_by = ${workerId} and status = 'running'`;
+    where id = any(${jobIds}) and locked_by = ${workerId} and status = 'running'`;
 }
 
 /**
@@ -41,7 +41,7 @@ export async function releaseJobs(jobIds, workerId) {
   await sql`
     update jobs set status = 'queued', locked_at = null, locked_by = null,
       attempts = greatest(attempts - 1, 0), updated_at = now()
-    where id = any(${sql.array(jobIds)}) and locked_by = ${workerId} and status = 'running'`;
+    where id = any(${jobIds}) and locked_by = ${workerId} and status = 'running'`;
 }
 
 export async function enqueue({ type, sermonId = null, itemId = null, payload = {}, runAfter = null, maxAttempts = 3 }) {

@@ -73,7 +73,8 @@ async function loop() {
   // Tell the queue these jobs are still ours. Without it a long render would
   // look abandoned and get picked up twice.
   setInterval(() => {
-    heartbeat([...inFlight.keys()], WORKER_ID).catch(() => {});
+    heartbeat([...inFlight.keys()], WORKER_ID)
+      .catch(err => console.error(`[worker] heartbeat failed, jobs may be reclaimed while still running: ${err.message}`));
   }, HEARTBEAT_MS).unref();
 
   while (running) {

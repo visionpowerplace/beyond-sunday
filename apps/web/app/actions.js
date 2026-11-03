@@ -247,6 +247,48 @@ export async function rejectAction(formData) {
   revalidatePath(`/sundays/sermon/${formData.get('sermonId')}`);
 }
 
+/**
+ * Posting and scheduling are the same decision: which accounts, and when.
+ *
+ * They used to be two forms. The networks lived on the scheduling form, so
+ * ticking Instagram and pressing "Post now" posted nothing: publishNow found
+ * no networks on the item, returned false, and the action threw the answer
+ * away. Nothing happened and nothing said why. One form, two buttons, and
+ * the ticked accounts are saved whichever button is pressed.
+ */
+export async function shareAction(formData) {
+  const id = String(formData.get('id'));
+  const sermonId = String(formData.get('sermonId'));
+  const back = `/sundays/sermon/${sermonId}`;
+  const intent = String(formData.get('intent') || 'schedule');
+  const when = String(formData.get('when') || '');
+  const networks = formData.getAll('networks').map(String).filter(Boolean);
+
+  if (!networks.length) {
+    redirect(`${back}?problem=${encodeURIComponent('Tick at least one account to post to.')}`);
+  }
+
+  if (intent === 'now') {
+    await scheduleItem(id, null, networks);
+    const started = await publishNow(id);
+    revalidatePath(back);
+    redirect(started
+      ? `${back}?posted=${encodeURIComponent(`Posting to ${networks.join(' and ')} now.`)}`
+      : `${back}?problem=${encodeURIComponent('Could not start posting. Try again.')}`);
+  }
+
+  if (!when) {
+    redirect(`${back}?problem=${encodeURIComponent('Pick a date and time, or use Post now.')}`);
+  }
+  const at = new Date(when);
+  if (Number.isNaN(at.getTime())) {
+    redirect(`${back}?problem=${encodeURIComponent('That date did not make sense.')}`);
+  }
+  await scheduleItem(id, at, networks);
+  revalidatePath(back);
+  redirect(`${back}?posted=${encodeURIComponent(`Scheduled for ${at.toLocaleString()} on ${networks.join(' and ')}.`)}`);
+}
+
 export async function scheduleAction(formData) {
   const when = String(formData.get('when') || '');
   const networks = formData.getAll('networks').map(String);

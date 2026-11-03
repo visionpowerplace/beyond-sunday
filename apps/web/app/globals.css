@@ -186,3 +186,31 @@ blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--gol
 }
 .feed-item:hover { border-color: var(--muted); }
 .feed-item.on { border-color: var(--gold); background: var(--card); box-shadow: inset 3px 0 0 var(--gold); }
+
+/* Sending something out is a decision of its own, so it gets a panel rather
+   than another row of buttons under the approve row. Approving used to
+   reveal a thin bordered strip that looked like more of the same, and the
+   accounts lived on the scheduling form, so ticking one and pressing
+   "Post now" posted nothing at all. */
+.share {
+  margin-top: 12px; padding: 12px 14px;
+  border: 1px solid var(--line); border-left: 3px solid var(--gold);
+  border-radius: 12px; background: var(--paper);
+}
+.share-head {
+  font-size: 0.82rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--gold); margin-bottom: 8px;
+}
+.note-good {
+  border: 1px solid var(--good); color: var(--good);
+  background: #f2f9f5; border-radius: 10px;
+  padding: 10px 12px; margin: 10px 0; font-size: 0.9rem;
+}
+
+/* A limit worth reading before you spend a sermon on it, not after. */
+.note-warn {
+  border: 1px solid var(--line); border-left: 3px solid var(--warn);
+  background: var(--warn-bg); color: var(--ink);
+  border-radius: 10px; padding: 10px 12px; margin: 10px 0 0;
+  font-size: 0.88rem; line-height: 1.5;
+}

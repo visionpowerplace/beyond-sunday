@@ -1,6 +1,6 @@
 import { getSermon, getItems, assetUrl, uploadUrl, KINDS, pendingGenerations, pendingClipCount } from '../../../../lib/data.js';
 import { getChurch, connectedAccounts, postingConfigured } from '../../../../lib/church.js';
-import { approveAction, rejectAction, scheduleAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction, makeAspectAction, publishNowAction } from '../../../actions.js';
+import { approveAction, rejectAction, shareAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction, makeAspectAction } from '../../../actions.js';
 import { notFound } from 'next/navigation';
 import UploadBox from '../../../upload-box.jsx';
 import AddButton from '../../../add-button.jsx';
@@ -42,6 +42,9 @@ export default async function SermonPage({ params, searchParams }) {
         {sermon.church_name}{sermon.preacher ? ` · ${sermon.preacher}` : ''}
         {sermon.duration_s ? ` · ${Math.round(sermon.duration_s / 60)} min` : ''}
       </p>
+
+      {query?.problem && <div className="flag">{String(query.problem)}</div>}
+      {query?.posted && <div className="note-good">{String(query.posted)}</div>}
 
       {working && (
         <div className="card">
@@ -290,43 +293,51 @@ function ItemCard({ item, sermonId, networks }) {
         </form>
       </div>
 
+      {item.status === 'needs_review' && networks.length > 0 && (
+        <p className="small muted" style={{ margin: '8px 0 0' }}>
+          Approving does not post anything. It marks this as ready and opens the
+          accounts to send it to.
+        </p>
+      )}
+
       {['approved', 'scheduled'].includes(item.status) && (
         networks.length ? (
-          <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-            <form action={scheduleAction}>
-              <input type="hidden" name="id" value={item.id} />
-              <input type="hidden" name="sermonId" value={sermonId} />
-              <div className="row">
-                {networks.map(n => (
-                  <label key={n} className="small" style={{ margin: 0, textTransform: 'capitalize', fontWeight: 500 }}>
-                    <input type="checkbox" name="networks" value={n}
-                           defaultChecked={(item.networks ?? []).includes(n)}
-                           style={{ width: 'auto', minHeight: 0, marginRight: 6 }} />
-                    {n}
-                  </label>
-                ))}
-              </div>
-              <div className="row" style={{ marginTop: 8 }}>
-                <input type="datetime-local" name="when"
-                       defaultValue={item.scheduled_for ? localValue(item.scheduled_for) : ''}
-                       style={{ flex: 1, minWidth: 200 }} />
-                <button>{item.scheduled_for ? 'Reschedule' : 'Schedule'}</button>
-              </div>
-            </form>
-            {item.status === 'approved' && (
-              <form action={publishNowAction} style={{ marginTop: 8 }}>
-                <input type="hidden" name="id" value={item.id} />
-                <input type="hidden" name="sermonId" value={sermonId} />
-                <button className="small" style={{ minHeight: 32 }}>Post now</button>
-              </form>
-            )}
-            <p className="small muted" style={{ margin: '6px 0 0' }}>
-              Tick the networks, then pick a time, or post it straight away.
+          <form action={shareAction} className="share">
+            <input type="hidden" name="id" value={item.id} />
+            <input type="hidden" name="sermonId" value={sermonId} />
+
+            <div className="share-head">Send this out</div>
+
+            <div className="row" style={{ gap: 14 }}>
+              {networks.map(n => (
+                <label key={n} className="small" style={{ margin: 0, textTransform: 'capitalize', fontWeight: 500 }}>
+                  <input type="checkbox" name="networks" value={n}
+                         defaultChecked={(item.networks ?? []).includes(n)}
+                         style={{ width: 'auto', minHeight: 0, marginRight: 6 }} />
+                  {n}
+                </label>
+              ))}
+            </div>
+
+            <div className="row" style={{ marginTop: 10, gap: 8 }}>
+              <button name="intent" value="now" className="primary">Post now</button>
+              <span className="small muted">or</span>
+              <input type="datetime-local" name="when"
+                     defaultValue={item.scheduled_for ? localValue(item.scheduled_for) : ''}
+                     style={{ flex: 1, minWidth: 190 }} />
+              <button name="intent" value="schedule">
+                {item.scheduled_for ? 'Reschedule' : 'Schedule'}
+              </button>
+            </div>
+
+            <p className="small muted" style={{ margin: '8px 0 0' }}>
+              Tick the accounts, then post straight away or pick a time. Nothing leaves
+              until you press one of these.
             </p>
-          </div>
+          </form>
         ) : (
           <p className="small muted" style={{ marginTop: 10 }}>
-            <a href="/settings">Connect an account</a> to schedule this, or use the download button.
+            <a href="/settings">Connect an account</a> to post this, or use the download button.
           </p>
         )
       )}

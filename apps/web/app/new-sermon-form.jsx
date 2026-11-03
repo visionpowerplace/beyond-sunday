@@ -38,8 +38,17 @@ export default function NewSermonForm({ children }) {
       <p className="small muted" style={{ margin: '6px 0 0' }}>
         {mode === 'upload'
           ? 'Any video or audio file, any length. It goes straight to the processing server. This is the only route that gives you clips.'
-          : 'No video needed. Everything except the clips, in under a minute, and it costs nothing to transcribe.'}
+          : 'No video needed, and nothing to transcribe, so this takes under a minute.'}
       </p>
+
+      {mode === 'captions' && (
+        <p className="note-warn">
+          <b>This cannot make video clips.</b> A clip has to be cut out of the recording,
+          and a transcript is only the words. You still get highlight points, carousels,
+          write-ups, a summary and the five-day devotional. For clips, upload the
+          recording instead.
+        </p>
+      )}
 
       {mode === 'upload' && (
         <details className="guide">

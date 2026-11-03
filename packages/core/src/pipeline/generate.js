@@ -22,15 +22,26 @@ export async function runGenerate(job) {
 
   const t = sermon.transcript;
   const all = t.segments ?? [];
-  const win = await resolveWindow(sermon, all);
-  const segments = all.filter(s => s.end > win.start && s.start < win.end);
-  if (!segments.length) throw new Error('the chosen sermon window contains no speech — check the start and end times');
+
+  // A pasted plain-text transcript carries no timings, so every segment sits
+  // at 0 and there is no window to find: the text IS the sermon. Narrowing it
+  // by time would discard all of it, which is how this used to fail — and the
+  // empty window got written back, so every retry failed the same way.
+  const timed = t.timed !== false && all.some(s => Number(s.end) > 0);
+
+  const win = timed ? await resolveWindow(sermon, all) : { start: 0, end: 0, whole: true };
+  const segments = timed ? all.filter(s => s.end > win.start && s.start < win.end) : all;
+  if (!segments.length) {
+    throw new Error(timed
+      ? 'the chosen sermon window contains no speech — check the start and end times'
+      : 'that transcript has no usable text in it');
+  }
 
   const context = {
     title: sermon.title,
     preacher: sermon.preacher,
     church: sermon.church_name,
-    durationS: win.end - win.start,
+    durationS: win.whole ? null : win.end - win.start,
     segments: capSegments(segments),
     scripture: t.scripture ?? [],
   };
@@ -73,8 +84,11 @@ async function generateKind({ kind, sermon, context, transcript, win, highlights
     return rows
       .map(r => ({
         ...r,
-        start_s: Math.max(win.start, r.start_s),
-        end_s: Math.min(win.end, r.end_s),
+        // With no window there is nothing to clamp to; an untimed transcript
+        // cannot make real clips anyway, and clamping to 0 made every one of
+        // them zero-length.
+        start_s: win.whole ? r.start_s : Math.max(win.start, r.start_s),
+        end_s: win.whole ? r.end_s : Math.min(win.end, r.end_s),
         flags: sql.json([...(r._flags ?? []), ...musicFlag]),
       }))
       .filter(r => r.end_s - r.start_s >= 5)

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { config, describeProviders } from '@bs/core/config.js';
+import { trimMiddle } from '@bs/core/trim.js';
 import { sql, closeDb } from '@bs/core/db.js';
 import { claimNext, finishJob, failJob, enqueue } from '@bs/core/queue.js';
 import { runIngest } from '@bs/core/pipeline/ingest.js';
@@ -128,7 +129,7 @@ async function runJob(job) {
     // "processing" forever. Silent failure is the complaint every tool in
     // this market gets.
     if (exhausted && job.sermon_id) {
-      await sql`update sermons set status = 'failed', error = ${String(err.message).slice(0, 1000)}, updated_at = now() where id = ${job.sermon_id}`;
+      await sql`update sermons set status = 'failed', error = ${trimMiddle(err.message)}, updated_at = now() where id = ${job.sermon_id}`;
     }
   }
 }

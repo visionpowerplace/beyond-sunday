@@ -9,7 +9,40 @@ import { sql } from './db.js';
  * each other, and a job that dies mid-flight is reclaimed by the stale sweep.
  */
 
-const STALE_AFTER_MINUTES = 30;
+/**
+ * A running job is abandoned if its lock has not been touched recently.
+ *
+ * This used to be a flat 30 minutes, because a long clip render holds its
+ * job for a long time and must not be stolen mid-render. But that also meant
+ * a job orphaned by a deploy — claimed, then the container stops before it
+ * finishes — sat untouchable for half an hour while the sermon showed
+ * "making these now" and nothing happened.
+ *
+ * A live worker now touches locked_at every half minute, so a lock going
+ * cold means the worker is gone, however long the job itself takes.
+ */
+const STALE_AFTER_MINUTES = 3;
+export const HEARTBEAT_MS = 30_000;
+
+/** Keep this worker's claim on the jobs it is actually still running. */
+export async function heartbeat(jobIds, workerId) {
+  if (!jobIds.length) return;
+  await sql`
+    update jobs set locked_at = now()
+    where id = any(${sql.array(jobIds)}) and locked_by = ${workerId} and status = 'running'`;
+}
+
+/**
+ * Hand back the jobs this worker holds, so a restart requeues them at once
+ * instead of leaving them for the stale sweep.
+ */
+export async function releaseJobs(jobIds, workerId) {
+  if (!jobIds.length) return;
+  await sql`
+    update jobs set status = 'queued', locked_at = null, locked_by = null,
+      attempts = greatest(attempts - 1, 0), updated_at = now()
+    where id = any(${sql.array(jobIds)}) and locked_by = ${workerId} and status = 'running'`;
+}
 
 export async function enqueue({ type, sermonId = null, itemId = null, payload = {}, runAfter = null, maxAttempts = 3 }) {
   const [job] = await sql`
@@ -59,7 +92,7 @@ export async function failJob(job, err) {
   return { exhausted };
 }
 
-async function reclaimStale() {
+export async function reclaimStale() {
   await sql`
     update jobs set status = 'queued', locked_at = null, updated_at = now()
     where status = 'running'

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { config, describeProviders } from '@bs/core/config.js';
 import { trimMiddle } from '@bs/core/trim.js';
 import { sql, closeDb } from '@bs/core/db.js';
-import { claimNext, finishJob, failJob, enqueue } from '@bs/core/queue.js';
+import { claimNext, finishJob, failJob, enqueue, heartbeat, releaseJobs, HEARTBEAT_MS } from '@bs/core/queue.js';
 import { runIngest } from '@bs/core/pipeline/ingest.js';
 import { runTranscribe } from '@bs/core/pipeline/transcribe.js';
 import { runGenerate } from '@bs/core/pipeline/generate.js';
@@ -70,6 +70,11 @@ async function loop() {
   await migrate();
   sweepStorage();   // on boot, then hourly
   setInterval(sweepStorage, 60 * 60 * 1000).unref();
+  // Tell the queue these jobs are still ours. Without it a long render would
+  // look abandoned and get picked up twice.
+  setInterval(() => {
+    heartbeat([...inFlight.keys()], WORKER_ID).catch(() => {});
+  }, HEARTBEAT_MS).unref();
 
   while (running) {
     if (inFlight.size >= config.concurrency) { await Promise.race(inFlight.values()); continue; }
@@ -327,11 +332,16 @@ server.listen(config.workerPort, () => console.log(`[worker] files on :${config.
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, async () => {
-    console.log(`[worker] ${sig}, finishing ${inFlight.size} running job(s) then stopping`);
+    const held = [...inFlight.keys()];
+    console.log(`[worker] ${sig}, releasing ${held.length} running job(s) then stopping`);
     running = false;
     server.close();
-    // The in-flight job keeps its lock; the stale sweep reclaims it if we die here.
-    setTimeout(async () => { await closeDb(); process.exit(0); }, 1000).unref();
+    // Hand the jobs back rather than dying with the lock held. A deploy used
+    // to strand whatever was in flight until the stale sweep, so a sermon sat
+    // at "making these now" for half an hour for no visible reason.
+    try { await releaseJobs(held, WORKER_ID); } catch (err) { console.error(`[worker] could not release: ${err.message}`); }
+    await closeDb();
+    process.exit(0);
   });
 }
 

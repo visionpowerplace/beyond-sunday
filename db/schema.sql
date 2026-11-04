@@ -167,3 +167,47 @@ alter table churches add column if not exists google_connected_at timestamptz;
 
 -- The church's sermon feed, so every Sunday after the first is one click.
 alter table churches add column if not exists feed_url text;
+
+-- A church belongs to the person who signed up for it. Before this, sermons
+-- picked a church by matching the name typed on the form, which forked a
+-- second church whenever the name differed by so much as a word, and matched
+-- across every account rather than within one.
+alter table churches add column if not exists owner_user_id uuid references users(id) on delete set null;
+
+update churches c
+   set owner_user_id = u.id
+  from users u
+ where u.church_id = c.id
+   and c.owner_user_id is null;
+
+-- Repair for churches already forked this way: move their sermons onto the
+-- one church the person actually owns, so the accounts, branding and credits
+-- that live there apply to every sermon.
+--
+-- Guarded to a single account. With more than one person in the database an
+-- unowned church cannot be attributed safely, and merging two real churches
+-- would be far worse than leaving them apart, so this does nothing at all.
+do $$
+declare
+  only_user uuid;
+  home      uuid;
+begin
+  if (select count(*) from users) <> 1 then return; end if;
+  select id, church_id into only_user, home from users limit 1;
+  if home is null then return; end if;
+
+  update sermons s
+     set church_id = home
+    from churches c
+   where s.church_id = c.id
+     and c.id <> home
+     and c.owner_user_id is null;
+
+  -- Clear away what is now empty, and never anything still in use.
+  delete from churches c
+   where c.id <> home
+     and c.owner_user_id is null
+     and not exists (select 1 from sermons s where s.church_id = c.id)
+     and not exists (select 1 from users u where u.church_id = c.id)
+     and c.zernio_profile_id is null;
+end $$;

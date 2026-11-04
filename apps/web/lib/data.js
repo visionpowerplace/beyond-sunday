@@ -34,15 +34,47 @@ export async function getItems(sermonId) {
   return sql`select * from items where sermon_id = ${sermonId} order by kind, ordinal`;
 }
 
-export async function getOrCreateChurch(name) {
-  const [found] = await sql`select * from churches where name = ${name} limit 1`;
-  if (found) return found;
-  const [made] = await sql`insert into churches (name) values (${name}) returning *`;
+/**
+ * The church a sermon belongs to is the one the signed-in person owns.
+ *
+ * This used to look a church up by name and make a new one when the name did
+ * not match. So typing a different church on the form, or correcting a typo,
+ * silently forked a second church: the sermons went to the new row while the
+ * connected accounts, branding, logo and credits stayed on the old one. The
+ * share controls then said "Connect an account" on a church that had two.
+ *
+ * Worse, the name was matched across the whole table and nothing was scoped
+ * to a user, so two churches that happened to share a name would have shared
+ * each other's accounts and sermons.
+ *
+ * The name on the form renames the church. It never chooses one.
+ */
+export async function churchForUser(user, name) {
+  const wanted = String(name ?? '').trim();
+
+  if (user?.church_id) {
+    const [church] = await sql`select * from churches where id = ${user.church_id}`;
+    if (church) {
+      if (wanted && wanted !== church.name) {
+        const [renamed] = await sql`
+          update churches set name = ${wanted} where id = ${church.id} returning *`;
+        return renamed;
+      }
+      return church;
+    }
+  }
+
+  // First sermon: the church is created here and the person is tied to it.
+  const [made] = await sql`
+    insert into churches (name, owner_user_id)
+    values (${wanted || 'My church'}, ${user?.id ?? null})
+    returning *`;
+  if (user?.id) await sql`update users set church_id = ${made.id} where id = ${user.id}`;
   return made;
 }
 
-export async function createSermon({ churchName, title, preacher, sourceUrl, startS, endS, upload }) {
-  const church = await getOrCreateChurch(churchName || 'My church');
+export async function createSermon({ user, churchName, title, preacher, sourceUrl, startS, endS, upload }) {
+  const church = await churchForUser(user, churchName);
   const token = upload ? randomUUID() : null;
 
   const [sermon] = await sql`
@@ -61,9 +93,9 @@ export async function createSermon({ churchName, title, preacher, sourceUrl, sta
  * A sermon built from a caption file: no download, no transcription, straight
  * to writing. Clips need the video, so they are offered only once one arrives.
  */
-export async function createSermonFromCaptions({ churchName, title, preacher, captions, sourceUrl }) {
+export async function createSermonFromCaptions({ user, churchName, title, preacher, captions, sourceUrl }) {
   const parsed = parseCaptions(captions);
-  const church = await getOrCreateChurch(churchName || 'My church');
+  const church = await churchForUser(user, churchName);
   const transcript = {
     ...parsed,
     scripture: findScripture(parsed.text, parsed.words),

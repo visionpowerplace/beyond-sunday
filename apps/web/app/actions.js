@@ -50,6 +50,7 @@ export async function newSermonAction(formData) {
     let made;
     try {
       made = await createSermonFromCaptions({
+        user,
         churchName: String(formData.get('churchName') || '').trim(),
         title, preacher: String(formData.get('preacher') || '').trim(),
         captions, sourceUrl: rawUrl || null,
@@ -62,6 +63,7 @@ export async function newSermonAction(formData) {
   }
 
   const sermon = await createSermon({
+    user,
     churchName: String(formData.get('churchName') || '').trim(),
     title,
     preacher: String(formData.get('preacher') || '').trim(),

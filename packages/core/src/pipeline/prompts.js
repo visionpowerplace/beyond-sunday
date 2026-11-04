@@ -65,7 +65,7 @@ const HIGHLIGHT_TASK = `Find the things this sermon actually argued. Not topics,
 
 3 to 5 highlights.`;
 
-const CAROUSEL_TASK = `Turn each point below into a slide carousel.
+const CAROUSEL_TASK = `Turn the strongest of the points below into slide carousels.
 
 Each slide carries an "image_prompt": the photograph drawn behind its words. Describe a real scene a photographer could have taken, concrete and specific, that carries the slide's idea without illustrating it literally.
 
@@ -99,7 +99,9 @@ Also give each slide a "motif" from this list, used as the fallback background i
   ]
 }
 
-One carousel per point, 4 to 6 slides each. The heading must be under 5 words and the body under 22: these are set in large type over a photograph, and longer text is cut off.`;
+At most 3 carousels, 4 to 5 slides each. If there are more than three points, choose the three that stand best on their own and leave the rest: a church posts one or two of these in a week, and every slide is a photograph that costs real money to make.
+
+The heading must be under 5 words and the body under 22: these are set in large type over a photograph, and longer text is cut off.`;
 
 const WRITEUP_TASK = `Write a short post developing each point below.
 

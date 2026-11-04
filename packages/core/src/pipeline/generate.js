@@ -1,6 +1,14 @@
 import { sql } from '../db.js';
 import { cleanDeep } from '../clean.js';
 import { recordSpend } from '../spend.js';
+
+/** How many carousels one sermon makes. Each is 4 to 5 paid photographs. */
+export const CAROUSEL_CAP = Number(process.env.MAX_CAROUSELS || 3);
+
+/** Applied to whatever the model returned, which is not always what was asked. */
+export function capCarousels(list) {
+  return (list ?? []).slice(0, CAROUSEL_CAP);
+}
 import { enqueue } from '../queue.js';
 import { completeJson } from '../providers/llm.js';
 import { BASE_SYSTEM, KINDS, buildUser, LOCATE_SYSTEM, locateUser } from './prompts.js';
@@ -168,7 +176,10 @@ function toItems(kind, data, sermon, transcript) {
     scripture: sql.json(refsWithTime(h.scripture_refs, transcript)),
   }));
 
-  if (kind === 'carousel') return (data.carousels ?? []).map((c, i) => ({
+  // Capped here as well as in the prompt. Every slide is a paid photograph,
+  // so a model that returns five sets anyway should not quietly cost half as
+  // much again.
+  if (kind === 'carousel') return capCarousels(data.carousels).map((c, i) => ({
     ...base, kind, ordinal: i, ...empty,
     title: c.title ?? `Carousel ${i + 1}`,
     body: sql.json({ slides: c.slides ?? [], caption: c.caption ?? '', highlight_index: c.highlight_index ?? i }),

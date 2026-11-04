@@ -181,7 +181,7 @@ export default async function SermonPage({ params, searchParams }) {
             {missing.length > 0 && (
               <p className="small muted" style={{ margin: '10px 0 0' }}>
                 Each takes about a minute and uses the transcript you already have.
-                {missing.some(k => k.key === 'carousel') && ' Carousels buy a photograph for every slide, about 80c a sermon.'}
+                {missing.some(k => k.key === 'carousel') && ' Carousels buy a photograph for every slide: three sets, about 60c.'}
               </p>
             )}
 

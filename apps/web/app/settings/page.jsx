@@ -70,12 +70,15 @@ export default async function Settings({ searchParams }) {
 
         <label htmlFor="imageProvider">Carousel photographs</label>
         <select id="imageProvider" name="imageProvider" defaultValue={church.image_provider ?? ''}>
-          <option value="">Free (slower, quality varies)</option>
-          <option value="openrouter">Paid, better quality (about 20c a carousel)</option>
-          <option value="none">No photographs, use the drawn backgrounds</option>
+          <option value="">Photographs, about 20c a carousel</option>
+          <option value="none">No photographs, use the drawn backgrounds (free)</option>
         </select>
         <p className="small muted" style={{ margin: '4px 0 0' }}>
-          Change this, then press Redo on a carousel to compare the two on the same slides.
+          A carousel is five slides and each photograph costs about 4c, so one
+          sermon of four or five carousels runs to roughly 80c. The drawn
+          backgrounds cost nothing and still carry your colours. A photograph
+          is paid for once: pressing Redo on slides that have not changed
+          reuses it.
         </p>
 
         <label htmlFor="aspect">Default clip size</label>

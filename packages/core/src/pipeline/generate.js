@@ -1,5 +1,6 @@
 import { sql } from '../db.js';
 import { cleanDeep } from '../clean.js';
+import { recordSpend } from '../spend.js';
 import { enqueue } from '../queue.js';
 import { completeJson } from '../providers/llm.js';
 import { BASE_SYSTEM, KINDS, buildUser, LOCATE_SYSTEM, locateUser } from './prompts.js';
@@ -76,6 +77,10 @@ async function generateKind({ kind, sermon, context, transcript, win, highlights
     system: BASE_SYSTEM,
     user: buildUser({ kind, ...context, highlights }),
     maxTokens: KINDS[kind].maxTokens,
+    onSpend: u => recordSpend({
+      sermonId: sermon.id, churchId: sermon.church_id, stage: 'llm',
+      model: u.model, costUsd: u.costUsd, units: 1, detail: `${kind}: ${u.detail}`,
+    }),
   })) ?? mockFor(kind, context);
 
   // The prompt asks for no dashes and no mention of who preached. This makes
@@ -208,7 +213,13 @@ async function resolveWindow(sermon, segments) {
 
   let found = null;
   try {
-    found = await completeJson({ system: LOCATE_SYSTEM, user: locateUser({ segments }), maxTokens: 800, temperature: 0.1 });
+    found = await completeJson({
+      system: LOCATE_SYSTEM, user: locateUser({ segments }), maxTokens: 800, temperature: 0.1,
+      onSpend: u => recordSpend({
+        sermonId: sermon.id, churchId: sermon.church_id, stage: 'llm',
+        model: u.model, costUsd: u.costUsd, units: 1, detail: `finding the preaching: ${u.detail}`,
+      }),
+    });
   } catch {
     found = null;   // locating is a convenience; never fail the work over it
   }

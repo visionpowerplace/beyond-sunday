@@ -1,5 +1,6 @@
 import { getSermon, getItems, assetUrl, uploadUrl, KINDS, pendingGenerations, pendingClipCount } from '../../../../lib/data.js';
 import { getChurch, connectedAccounts, postingConfigured } from '../../../../lib/church.js';
+import { spendForSermon, money } from '@bs/core/spend.js';
 import { approveAction, rejectAction, shareAction, setWindowAction, generateKindAction, retryAction, deleteSermonAction, makeAspectAction } from '../../../actions.js';
 import { notFound } from 'next/navigation';
 import UploadBox from '../../../upload-box.jsx';
@@ -20,6 +21,7 @@ export default async function SermonPage({ params, searchParams }) {
   const accounts = postingConfigured() ? await connectedAccounts(church) : [];
   const networks = [...new Set(accounts.map(a => a.platform))];
   const pending = await pendingGenerations(id);
+  const bill = await spendForSermon(id);
   const clipsLeft = await pendingClipCount(id);
   const present = [...new Set(items.map(i => i.kind))];
   const missing = KINDS.filter(k => !present.includes(k.key) && !pending.includes(k.key));
@@ -179,7 +181,22 @@ export default async function SermonPage({ params, searchParams }) {
             {missing.length > 0 && (
               <p className="small muted" style={{ margin: '10px 0 0' }}>
                 Each takes about a minute and uses the transcript you already have.
+                {missing.some(k => k.key === 'carousel') && ' Carousels buy a photograph for every slide, about 80c a sermon.'}
               </p>
+            )}
+
+            {bill.total > 0 && (
+              <div className="spend">
+                <b>{money(bill.total)}</b> spent on this sermon
+                <ul>
+                  {bill.byStage.map(r => (
+                    <li key={r.stage}>
+                      {r.stage === 'image' ? `${r.units} photographs` : `${r.units} model calls`}
+                      {' '}{money(r.cost)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </aside>

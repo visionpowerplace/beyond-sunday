@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import sharp from 'sharp';
 import { config } from '../config.js';
@@ -6,6 +7,7 @@ import { sql } from '../db.js';
 import { brandOf, mix } from '../brand.js';
 import { motif, MOTIF_NAMES } from './motifs.js';
 import { generateImage, photoPrompt } from '../providers/image.js';
+import { recordSpend } from '../spend.js';
 
 /**
  * Carousel slides.
@@ -43,7 +45,11 @@ export async function runRenderCarousel(job) {
     // Photographs are made one at a time rather than in parallel: the free
     // generator rate-limits a burst and returns nothing for half the deck.
     const photo = await backdropFor(slide, i, item.id, church.image_provider,
-      (msg) => { if (!problem) problem = msg; });
+      (msg) => { if (!problem) problem = msg; },
+      (u) => recordSpend({
+        sermonId: item.sermon_id, churchId: church.id, stage: 'image',
+        model: u.model, costUsd: u.costUsd, units: 1, detail: u.detail,
+      }));
     if (photo) withPhoto++;
 
     const out = path.join(dir, `${String(i + 1).padStart(2, '0')}.png`);
@@ -65,14 +71,48 @@ export async function runRenderCarousel(job) {
 }
 
 /** The photograph, resized to fill the frame. Null when there isn't one. */
-async function backdropFor(slide, index, itemId, provider, onProblem) {
+/**
+ * Photographs are kept by what was asked for, not by which slide asked.
+ *
+ * Pressing Redo used to buy the whole deck again at four cents a slide, even
+ * when nothing about the slides had changed, and changing one line of text
+ * re-bought the other four photographs with it. The same prompt now returns
+ * the same file for nothing.
+ */
+export async function cachedPhoto(prompt, make) {
+  const key = createHash('sha256').update(`${prompt}|${W}x${H}`).digest('hex').slice(0, 32);
+  const dir = path.join(config.storageDir, 'cache', 'photos');
+  const file = path.join(dir, `${key}.png`);
+
+  try {
+    const hit = await fs.promises.readFile(file);
+    if (hit?.length > 1000) return { bytes: hit, cached: true };
+  } catch { /* not cached yet */ }
+
+  const bytes = await make();
+  if (!bytes) return { bytes: null, cached: false };
+
+  try {
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(file, bytes);
+  } catch (err) {
+    console.error(`[carousel] could not cache the photograph: ${err.message}`);
+  }
+  return { bytes, cached: false };
+}
+
+async function backdropFor(slide, index, itemId, provider, onProblem, onSpend) {
   const scene = slide.image_prompt || slide.scene;
   if (!scene) return null;
 
   // A stable seed so re-rendering the same slide does not reshuffle the deck.
   const seed = [...`${itemId}${index}`].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 1e6, 7);
-  const bytes = await generateImage(photoPrompt(scene), { width: W, height: H, seed, provider, onProblem });
+  const prompt = photoPrompt(scene);
+
+  const { bytes, cached } = await cachedPhoto(prompt, () =>
+    generateImage(prompt, { width: W, height: H, seed, provider, onProblem, onSpend }));
   if (!bytes) return null;
+  if (cached) console.log('[carousel] reused a photograph already paid for');
 
   try {
     return await sharp(bytes).resize(W, H, { fit: 'cover', position: 'attention' }).png().toBuffer();

@@ -39,7 +39,7 @@ export async function generateImage(prompt, opts = {}) {
   return oneAtATime(() => generateOnce(prompt, opts));
 }
 
-async function generateOnce(prompt, { width = 1080, height = 1350, seed, provider, onProblem } = {}) {
+async function generateOnce(prompt, { width = 1080, height = 1350, seed, provider, onProblem, onSpend } = {}) {
   const note = (msg) => { console.error(`[image] ${msg}`); onProblem?.(msg); };
   if (!prompt?.trim()) return null;
   // A church can pick its own; otherwise the deployment's default.
@@ -53,7 +53,7 @@ async function generateOnce(prompt, { width = 1080, height = 1350, seed, provide
   try {
     switch (chosen) {
       case 'pollinations': return await pollinations(prompt, { width, height, seed });
-      case 'openrouter':   return await withRetry(() => openrouterImage(prompt, { width, height }));
+      case 'openrouter':   return await withRetry(() => openrouterImage(prompt, { width, height, onSpend }));
       case 'local':        return await localFile();
       case 'none':         return null;
       default:             return null;
@@ -142,7 +142,7 @@ function aspectRatio(width, height) {
   return `${Math.round(width / d)}:${Math.round(height / d)}`;
 }
 
-async function openrouterImage(prompt, { width, height }) {
+async function openrouterImage(prompt, { width, height, onSpend }) {
   if (!config.llm.openrouterKey) throw new Error('OPENROUTER_API_KEY is not set');
   const res = await fetch('https://openrouter.ai/api/v1/images', {
     method: 'POST',
@@ -159,6 +159,14 @@ async function openrouterImage(prompt, { width, height }) {
   });
   if (!res.ok) throw new Error(await readError(res));
   const data = await res.json();
+
+  // What this photograph actually cost. If the endpoint does not say, fall
+  // back to the published per-image rate so the total is never silently zero.
+  onSpend?.({
+    model: config.image.model || 'google/gemini-2.5-flash-image',
+    costUsd: Number(data?.usage?.cost ?? config.image.costPerImage),
+    detail: data?.usage?.cost != null ? 'reported by the provider' : 'estimated at the list rate',
+  });
 
   const b64 = data?.data?.[0]?.b64_json;
   if (b64) return Buffer.from(b64, 'base64');

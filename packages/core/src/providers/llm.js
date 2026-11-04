@@ -12,7 +12,7 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
  */
 export const LLM_PROVIDERS = ['openrouter', 'mock'];
 
-export async function completeJson({ system, user, maxTokens = 8000, temperature = 0.4 }) {
+export async function completeJson({ system, user, maxTokens = 8000, temperature = 0.4, onSpend }) {
   if (config.llm.provider === 'mock') return null;
   if (!LLM_PROVIDERS.includes(config.llm.provider)) {
     // As above: the value is never echoed, in case it is a key.
@@ -44,6 +44,17 @@ export async function completeJson({ system, user, maxTokens = 8000, temperature
     if (!res.ok) throw new Error(`openrouter ${res.status}: ${(await res.text()).slice(0, 500)}`);
     const data = await res.json();
     const raw = data?.choices?.[0]?.message?.content ?? '';
+
+    // OpenRouter returns what it actually charged on every response. It costs
+    // nothing to keep, and without it nobody can see where the money went
+    // until the provider starts refusing requests.
+    if (data?.usage?.cost != null) {
+      onSpend?.({
+        model: data.model ?? config.llm.model,
+        costUsd: Number(data.usage.cost),
+        detail: `${data.usage.prompt_tokens ?? '?'} in / ${data.usage.completion_tokens ?? '?'} out`,
+      });
+    }
 
     try {
       return JSON.parse(stripFence(raw));

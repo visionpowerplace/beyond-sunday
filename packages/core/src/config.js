@@ -58,6 +58,9 @@ export const config = {
     model: env.IMAGE_MODEL || '',
     timeoutMs: Number(env.IMAGE_TIMEOUT_MS || 120_000),
     localPath: env.IMAGE_LOCAL_PATH || '',
+    // Used only when the provider does not report a cost, so a total is
+    // never silently zero. The published rate for gemini-2.5-flash-image.
+    costPerImage: Number(env.IMAGE_COST_USD || 0.04),
   },
 
   // Posting goes through a provider that has already passed Meta's app review,

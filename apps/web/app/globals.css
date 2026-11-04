@@ -255,3 +255,13 @@ blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--gol
   .make form { display: inline-block; width: auto; margin-right: 7px; }
   .make form button { width: auto; }
 }
+
+/* What this sermon has actually cost at the provider. Without it the first
+   anyone knows about the bill is the provider refusing a request. */
+.spend {
+  margin-top: 12px; padding-top: 10px; border-top: 1px dashed #d8cdb2;
+  font-size: 0.82rem; color: var(--muted);
+}
+.spend b { color: var(--ink); }
+.spend ul { margin: 6px 0 0; padding-left: 16px; }
+.spend li { margin-bottom: 2px; }

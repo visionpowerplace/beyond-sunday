@@ -211,3 +211,19 @@ begin
      and not exists (select 1 from users u where u.church_id = c.id)
      and c.zernio_profile_id is null;
 end $$;
+
+-- What each sermon actually cost at the provider. Nothing recorded this
+-- before, so the first sign of the bill was the provider refusing a request.
+create table if not exists spend (
+  id         bigserial primary key,
+  sermon_id  uuid references sermons(id) on delete cascade,
+  church_id  uuid references churches(id) on delete cascade,
+  stage      text not null,              -- image | llm
+  model      text,
+  cost_usd   numeric(12, 6) not null default 0,
+  units      integer not null default 1, -- images, or calls
+  detail     text,
+  created_at timestamptz not null default now()
+);
+create index if not exists spend_sermon_idx on spend (sermon_id);
+create index if not exists spend_church_idx on spend (church_id, created_at desc);
